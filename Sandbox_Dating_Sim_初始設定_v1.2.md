@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.3 | 2026-04-27 | 明確規定 `required_flags` / `forbidden_flags` 必須使用 `flag.<id> == <value>` 完整表達式；明確 `status_flags.effect` 為 list of dict 並只在資料層要求非空。 |
 | v1.2.2 | 2026-04-27 | 補充 Phase 1-F UI 可先採用樸素表單與表格實作，完整地圖樹可留到 Dashboard 階段。 |
 | v1.2.1 | 2026-04-27 | 將 Setup Package 輸出的 `uiw_version` 統一為 `1.2`，並更新文件管線引用至 v1.1。 |
 | v1.2 | 2026-04-27 | 新增 UI 參考選項與點選帶入規則；補充風格關鍵字參考詞庫、地點模板、主地點/子地點建立流程與 UI 編排要求。 |
@@ -980,7 +981,7 @@ status_flags:
 - `status_id`: 狀態旗標的英文唯一 ID。
 - `label`: 使用者介面顯示的中文名稱。
 - `target`: 狀態作用對象，例如 `protagonist` 或特定 `character_id`。
-- `effect`: 狀態造成的規則效果，例如鎖定時間段、禁止移動、限制地點、修改數值倍率。
+- `effect`: 狀態造成的規則效果，例如鎖定時間段、禁止移動、限制地點、修改數值倍率。輸出為 list of dict，每筆使用單鍵格式（例如 `- block_time_slot: evening`）。Phase 3 Status Manager 才解析 dict 內容；資料層僅要求非空。
 - `duration`: 狀態持續時間。
 - `clear_rule`: 狀態解除條件。
 - `description`: 給使用者與 AI 理解用途的中文說明。
@@ -1049,12 +1050,12 @@ endings:
     target_character_id: sophie
     description: 主角與蘇菲互相理解，並一起面對債務與家庭問題。
     required_flags:
-      - sophie_route_completed == true
+      - flag.sophie_route_completed == true
     required_stats:
       - character.sophie.favor >= 80
       - stat.Debt <= 0
     forbidden_flags:
-      - sophie_bad_breakup == true
+      - flag.sophie_bad_breakup == true
     priority: critical
     route_tags:
       - character_route:sophie
@@ -1069,9 +1070,9 @@ endings:
 - `ending_type`: 結局類型，例如角色好結局、角色壞結局、普通結局、債務結局、隱藏結局。
 - `target_character_id`: 此結局主要關聯的角色。若是全局結局，可留空或使用 `global`。
 - `description`: 結局內容摘要，給 AI 生成最後劇情時參考。
-- `required_flags`: 必須成立的旗標條件。例如某角色路線已完成。
+- `required_flags`: 必須成立的旗標條件。例如某角色路線已完成。每一條都必須使用 `flag.<flag_id> == <value>` 的完整表達式，不得只寫裸 `flag_id`。
 - `required_stats`: 必須達成的數值條件。例如好感度、現金、債務、道德值。
-- `forbidden_flags`: 若這些旗標成立，則此結局不可達成。例如已分手、角色死亡、重大背叛。
+- `forbidden_flags`: 若這些旗標成立，則此結局不可達成。例如已分手、角色死亡、重大背叛。表達式格式同 `required_flags`。
 - `priority`: 驗證優先權。`critical` 代表 Route Validator 應優先測試。
 - `route_tags`: 路線標籤，用於 Critical Path Mode、Flowchart 篩選與報告分類。
 

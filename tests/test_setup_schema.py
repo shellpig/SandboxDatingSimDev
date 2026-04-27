@@ -30,7 +30,7 @@ def test_character_requires_character_id():
         Character(
             display_name="蘇菲",
             gender="female",
-            orientation=["male"],
+            orientation=["heterosexual"],
             role="main_love_interest",
             identity="classmate",
             personality_tags=["shy"],
@@ -46,8 +46,8 @@ def test_status_flag_requires_duration_and_clear_rule():
             status_id="tired",
             label="疲勞",
             target="protagonist",
-            effect=["-10 CHA"],
-            clear_rule=["sleep"],
+            effect=[{"stat.CHA": -10}],
+            clear_rule=["on_rest"],
             description="tired"
         )
     with pytest.raises(ValidationError, match="clear_rule"):
@@ -55,7 +55,7 @@ def test_status_flag_requires_duration_and_clear_rule():
             status_id="tired",
             label="疲勞",
             target="protagonist",
-            effect=["-10 CHA"],
+            effect=[{"stat.CHA": -10}],
             duration={"type": "days", "value": 1},
             description="tired"
         )

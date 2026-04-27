@@ -1,12 +1,26 @@
+from typing import Any, Literal
+from datetime import date
 from pydantic import BaseModel, Field
 from sandbox_dating_sim.schema.validation import ValidationReport
+
+LocationType = Literal["container", "sub_location", "standalone"]
+EmptyBehavior = Literal["hidden", "show_empty", "show_ambient_text", "allow_rest", "allow_wait"]
+DayType = Literal["weekday", "weekend", "holiday", "specific_date", "any"]
+TimeSlot = Literal["morning", "afternoon", "evening"]
+SchedulePriority = Literal["critical", "route", "normal", "ambient"]
+EventPriority = Literal["critical", "main", "route", "normal", "ambient"]
+Gender = Literal["male", "female", "non_binary"]
+Orientation = Literal["heterosexual", "homosexual", "bisexual", "pansexual"]
+FlagType = Literal["boolean", "integer", "string", "enum"]
+DurationType = Literal["time_slots", "days", "until_event", "until_cleared", "permanent"]
+ClearRule = Literal["on_time_advance", "on_day_end", "on_rest", "on_item_used", "on_event_result", "on_location_visit", "manual_only"]
 
 class World(BaseModel):
     world_id: str
     title: str
-    start_date: str
-    end_date: str
-    time_slots: list[str]
+    start_date: date
+    end_date: date
+    time_slots: list[TimeSlot]
     total_days: int | None = None
     global_style: list[str] = []
 
@@ -21,7 +35,7 @@ class InitialStats(BaseModel):
 class Protagonist(BaseModel):
     protagonist_id: str = "protagonist"
     name: str
-    gender: str
+    gender: Gender
     age: int
     occupation: str
     initial_stats: InitialStats
@@ -31,27 +45,27 @@ class Protagonist(BaseModel):
 class Location(BaseModel):
     location_id: str
     name: str
-    location_type: str  # container | sub_location | standalone
+    location_type: LocationType
     parent_location_id: str | None = None
     is_visitable: bool
     base_cost: int = 0
-    available_time_slots: list[str]
+    available_time_slots: list[TimeSlot]
     tags: list[str] = []
     unlock_conditions: list[str] = []
     closed_conditions: list[str] = []
     map_priority: str = "normal"
     map_display_group: str | None = None
     default_npc_capacity: int = 0
-    empty_behavior: str = "show_empty"
+    empty_behavior: EmptyBehavior = "show_empty"
     ambient_text: str | None = None
 
 class ScheduleEntry(BaseModel):
     schedule_id: str
-    day_type: str
-    time_slot: str
+    day_type: DayType
+    time_slot: TimeSlot
     location_id: str
     condition: list[str] = []
-    priority: str = "normal"
+    priority: SchedulePriority = "normal"
     schedule_order: int
 
 class AssetOption(BaseModel):
@@ -61,8 +75,8 @@ class AssetOption(BaseModel):
 class Character(BaseModel):
     character_id: str
     display_name: str
-    gender: str
-    orientation: list[str]
+    gender: Gender
+    orientation: list[Orientation]
     role: str
     identity: str
     personality_tags: list[str]
@@ -75,21 +89,21 @@ class Character(BaseModel):
 
 class FlagDef(BaseModel):
     flag_id: str
-    type: str
+    type: FlagType
     initial_value: bool | int | str
     description: str
 
 class StatusDuration(BaseModel):
-    type: str
+    type: DurationType
     value: int | None = None
 
 class StatusFlag(BaseModel):
     status_id: str
     label: str
     target: str
-    effect: list[str]
+    effect: list[dict[str, Any]]
     duration: StatusDuration
-    clear_rule: list[str]
+    clear_rule: list[ClearRule]
     description: str
     permanent_reason: str | None = None
 
@@ -102,7 +116,7 @@ class Ending(BaseModel):
     required_flags: list[str] = []
     required_stats: list[str] = []
     forbidden_flags: list[str] = []
-    priority: str = "normal"
+    priority: EventPriority = "normal"
     route_tags: list[str] = []
 
 class SetupPackage(BaseModel):
