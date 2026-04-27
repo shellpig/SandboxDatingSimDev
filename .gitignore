@@ -1,0 +1,17 @@
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*$py.class
+
+.env
+.env.*
+!.env.example
+
+build/
+dist/
+*.egg-info/
+
+.DS_Store
+Thumbs.db
