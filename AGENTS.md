@@ -30,3 +30,7 @@
 - `.\.venv\Scripts\python.exe`
 
 目標是讓 Agent 與使用者看到一致結果，避免誤用其他全域或內建 runtime Python。
+
+## 工具使用注意事項
+
+若 `rg` 在此環境被拒絕執行，改用 PowerShell 原生命令列出檔案與搜尋內容。

@@ -1,0 +1,39 @@
+world:
+  world_id: summer_city_2026
+  title: 夏日債務街
+  # missing start_date
+  end_date: "2026-05-26"
+  time_slots:
+    - morning
+    - afternoon
+    - evening
+
+protagonist:
+  name: 佑介
+  gender: male
+  age: 20
+  occupation: student
+  initial_stats:
+    INT: 5
+    CHA: 6
+    STR: 4
+    MORAL: 5
+    Cash: 3000
+  personality: friendly
+
+locations: []
+characters:
+  - # missing character_id
+    display_name: 蘇菲
+    gender: female
+    orientation: ["male"]
+    role: main_love_interest
+    identity: classmate
+    personality_tags: ["shy"]
+    allowed_emotions: []
+    allowed_costumes: []
+    allowed_positions: []
+
+flags: []
+status_flags: []
+endings: []
