@@ -1,0 +1,530 @@
+"""Interactive User Input Wizard prototype (Streamlit)."""
+
+import streamlit as st
+import yaml
+from datetime import date
+from pathlib import Path
+
+from sandbox_dating_sim.schema.setup import (
+    SetupPackage, World, Protagonist, InitialStats, Location,
+    Character, ScheduleEntry, AssetOption, FlagDef, StatusFlag,
+    StatusDuration, Ending,
+)
+from sandbox_dating_sim.uiw.linter import UIWLinter
+from sandbox_dating_sim.pipeline.setup_exporter import SetupPackageExporter
+from sandbox_dating_sim.uiw.defaults import (
+    STYLE_PRESETS, LOCATION_TEMPLATES, SUB_LOCATION_TEMPLATES,
+    EMOTION_PRESETS, COSTUME_PRESETS, POSITION_PRESETS,
+)
+
+
+def _init_state():
+    """
+    初始化 Streamlit session_state 中的預設資料結構。
+    這些預設值作為表單的初始輸入，避免在渲染期間發生 KeyError。
+    """
+    defaults = {
+        "world_id": "my_game", "title": "我的遊戲",
+        "start_date": date(2026, 4, 27), "end_date": date(2026, 5, 26),
+        "global_style": [],
+        "protag_id": "protagonist", "protag_name": "主角",
+        "protag_gender": "male", "protag_age": 18,
+        "protag_occupation": "student", "protag_personality": "friendly",
+        "protag_secret": "",
+        "INT": 5, "CHA": 5, "STR": 5, "MORAL": 5, "Cash": 3000, "Debt": 0,
+        "locations": [], "characters": [], "flags": [],
+        "status_flags": [], "endings": [],
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+
+
+def _build_package() -> SetupPackage:
+    """
+    從目前的 session_state 構建出完整的 SetupPackage Pydantic 模型。
+    這會在每次點擊驗證、預覽或匯出時被呼叫，用以確保資料符合 Canonical Schema 契約。
+    """
+    s = st.session_state
+    
+    # 建立世界設定模型
+    world = World(
+        world_id=s["world_id"], title=s["title"],
+        start_date=s["start_date"], end_date=s["end_date"],
+        time_slots=["morning", "afternoon", "evening"],
+        global_style=list(s["global_style"]),
+    )
+    
+    # 建立主角與初始數值模型
+    protag = Protagonist(
+        protagonist_id=s["protag_id"], name=s["protag_name"],
+        gender=s["protag_gender"], age=s["protag_age"],
+        occupation=s["protag_occupation"], personality=s["protag_personality"],
+        secret=s["protag_secret"] or None,
+        initial_stats=InitialStats(
+            INT=s["INT"], CHA=s["CHA"], STR=s["STR"],
+            MORAL=s["MORAL"], Cash=s["Cash"], Debt=s["Debt"],
+        ),
+    )
+    
+    # 組合並回傳完整的 SetupPackage
+    return SetupPackage(
+        world=world, protagonist=protag,
+        locations=[Location(**loc) for loc in s["locations"]],
+        characters=[Character(**ch) for ch in s["characters"]],
+        flags=[FlagDef(**f) for f in s["flags"]],
+        status_flags=[StatusFlag(**sf) for sf in s["status_flags"]],
+        endings=[Ending(**e) for e in s["endings"]],
+    )
+
+
+def _visitable_location_ids() -> list[str]:
+    """
+    回傳目前所有設定為可進入（is_visitable=True）的地點 ID 列表。
+    這用於在設定角色行程 (Schedule) 時過濾合法的地點選單。
+    """
+    return [
+        loc["location_id"] for loc in st.session_state["locations"]
+        if loc.get("is_visitable", False)
+    ]
+
+
+def _tab_world():
+    """渲染「世界觀與曆法」設定分頁的 UI 元件。"""
+    st.header("1. 世界觀與曆法")
+    
+    # 基本設定欄位
+    st.session_state["world_id"] = st.text_input("遊戲識別碼", st.session_state["world_id"])
+    st.session_state["title"] = st.text_input("遊戲標題", st.session_state["title"])
+    st.session_state["start_date"] = st.date_input("開始日期", st.session_state["start_date"])
+    st.session_state["end_date"] = st.date_input("結束日期", st.session_state["end_date"])
+
+    st.subheader("風格關鍵字")
+    # 顯示預設的風格選項按鈕
+    cols = st.columns(4)
+    for i, preset in enumerate(STYLE_PRESETS):
+        with cols[i % 4]:
+            if st.button(f"{preset['label']}", key=f"style_{preset['id']}"):
+                if preset["id"] not in st.session_state["global_style"]:
+                    st.session_state["global_style"].append(preset["id"])
+                    
+    # 允許手動輸入自訂風格
+    custom = st.text_input("自訂風格 (英文 ID)")
+    if custom and st.button("加入自訂風格"):
+        if custom not in st.session_state["global_style"]:
+            st.session_state["global_style"].append(custom)
+
+    # 顯示已選擇的風格，並提供清除按鈕
+    if st.session_state["global_style"]:
+        st.write("已選風格：", ", ".join(st.session_state["global_style"]))
+        if st.button("清除所有風格"):
+            st.session_state["global_style"] = []
+
+
+def _tab_protagonist():
+    """渲染「主角設定」分頁的 UI 元件，包含基本身分與初始六維數值。"""
+    st.header("2. 主角設定")
+    
+    # 收集主角基本資料
+    st.session_state["protag_id"] = st.text_input("主角 ID", st.session_state["protag_id"])
+    st.session_state["protag_name"] = st.text_input("主角姓名", st.session_state["protag_name"])
+    st.session_state["protag_gender"] = st.selectbox("性別", ["male", "female", "non_binary"],
+        index=["male", "female", "non_binary"].index(st.session_state["protag_gender"]))
+    st.session_state["protag_age"] = st.number_input("年齡", 1, 100, st.session_state["protag_age"])
+    st.session_state["protag_occupation"] = st.text_input("職業", st.session_state["protag_occupation"])
+    st.session_state["protag_personality"] = st.text_input("性格描述", st.session_state["protag_personality"])
+    st.session_state["protag_secret"] = st.text_area("主角的秘密（可選）", st.session_state["protag_secret"])
+
+    st.subheader("初始數值")
+    # 將數值輸入切分為三欄顯示
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.session_state["INT"] = st.slider("INT 智力", 1, 10, st.session_state["INT"])
+        st.session_state["CHA"] = st.slider("CHA 魅力", 1, 10, st.session_state["CHA"])
+    with c2:
+        st.session_state["STR"] = st.slider("STR 勇氣", 1, 10, st.session_state["STR"])
+        st.session_state["MORAL"] = st.slider("MORAL 道德", 1, 10, st.session_state["MORAL"])
+    with c3:
+        st.session_state["Cash"] = st.number_input("初始現金", 0, 100000, st.session_state["Cash"])
+        st.session_state["Debt"] = st.number_input("初始債務", 0, 1000000, st.session_state["Debt"])
+
+
+def _tab_locations():
+    """
+    渲染「地點與地圖」分頁。
+    允許使用者透過套用預設模板（如學校、商店街）來快速產生父子地點，
+    或是透過表單手動新增 container、sub_location 或 standalone 地點。
+    """
+    st.header("3. 地點與地圖")
+
+    # --- 地點清單 ---
+    if st.session_state["locations"]:
+        st.subheader("目前地點")
+        for i, loc in enumerate(st.session_state["locations"]):
+            parent = f" (父: {loc['parent_location_id']})" if loc.get("parent_location_id") else ""
+            label = f"{loc['name']} [{loc['location_type']}]{parent}"
+            with st.expander(label):
+                st.json(loc)
+                if st.button(f"刪除 {loc['location_id']}", key=f"del_loc_{i}"):
+                    st.session_state["locations"].pop(i)
+                    st.rerun()  # 重新執行以更新畫面
+
+    # --- 套用模板 ---
+    st.subheader("套用地點模板")
+    tpl_labels = [f"{t['label']} ({t['location_type']})" for t in LOCATION_TEMPLATES]
+    tpl_idx = st.selectbox("選擇模板", range(len(LOCATION_TEMPLATES)), format_func=lambda i: tpl_labels[i])
+    
+    if st.button("套用模板"):
+        tpl = LOCATION_TEMPLATES[tpl_idx]
+        loc_id = tpl.get("location_id_suggestion", tpl["template_id"])
+        
+        # 建立主要父地點（或獨立地點）
+        new_loc = {
+            "location_id": loc_id, "name": tpl["label"],
+            "location_type": tpl["location_type"],
+            "parent_location_id": None,
+            "is_visitable": tpl.get("is_visitable", False),
+            "base_cost": tpl.get("base_cost", 0),
+            "available_time_slots": tpl.get("available_time_slots", ["morning", "afternoon"]),
+            "tags": tpl.get("tags", []),
+            "empty_behavior": tpl.get("empty_behavior", "show_empty"),
+        }
+        st.session_state["locations"].append(new_loc)
+        
+        # 根據模板中的建議，自動建立對應的子地點
+        for sub_id in tpl.get("suggested_sub_locations", []):
+            sub_tpl = next((s for s in SUB_LOCATION_TEMPLATES if s["template_id"] == sub_id), None)
+            if sub_tpl:
+                sub_loc = {
+                    "location_id": f"{loc_id}_{sub_tpl['location_id_suffix']}",
+                    "name": sub_tpl["label"],
+                    "location_type": "sub_location",
+                    "parent_location_id": loc_id,
+                    "is_visitable": True,
+                    "base_cost": 0,
+                    "available_time_slots": sub_tpl.get("available_time_slots", ["morning", "afternoon"]),
+                    "tags": sub_tpl.get("tags", []),
+                    "empty_behavior": "show_empty",
+                }
+                st.session_state["locations"].append(sub_loc)
+        st.rerun()
+
+    # --- 手動新增 ---
+    st.subheader("手動新增地點")
+    with st.form("add_location", clear_on_submit=True):
+        loc_id = st.text_input("地點 ID (英文)")
+        loc_name = st.text_input("地點名稱")
+        loc_type = st.selectbox("類型", ["container", "sub_location", "standalone"])
+        
+        # 尋找現有的 container 以供 sub_location 選擇為父地點
+        containers = [l["location_id"] for l in st.session_state["locations"] if l["location_type"] == "container"]
+        parent = st.selectbox("父地點", [None] + containers)
+        
+        # container 預設不可直接進入
+        is_visit = st.checkbox("可進入", value=loc_type != "container")
+        slots = st.multiselect("可用時間段", ["morning", "afternoon", "evening"], default=["morning", "afternoon"])
+        tags = st.text_input("標籤 (逗號分隔)")
+        
+        if st.form_submit_button("新增地點"):
+            new_loc = {
+                "location_id": loc_id, "name": loc_name,
+                "location_type": loc_type,
+                # 只有子地點才保存父地點 ID
+                "parent_location_id": parent if loc_type == "sub_location" else None,
+                "is_visitable": is_visit if loc_type != "container" else False,
+                "base_cost": 0,
+                "available_time_slots": slots,
+                "tags": [t.strip() for t in tags.split(",") if t.strip()],
+                "empty_behavior": "show_empty",
+            }
+            st.session_state["locations"].append(new_loc)
+            st.rerun()
+
+
+def _tab_characters():
+    """
+    渲染「角色設定」分頁。
+    包含角色的基本資訊、性格、白名單（表情、服裝、位置）設定，
+    以及在角色下方建立其專屬行程 (Schedule) 的功能。
+    """
+    st.header("4. 角色設定")
+
+    if st.session_state["characters"]:
+        st.subheader("目前角色")
+        for i, ch in enumerate(st.session_state["characters"]):
+            with st.expander(f"{ch['display_name']} ({ch['character_id']})"):
+                st.json(ch)
+                if st.button(f"刪除 {ch['character_id']}", key=f"del_ch_{i}"):
+                    st.session_state["characters"].pop(i)
+                    st.rerun()
+
+    st.subheader("新增角色")
+    with st.form("add_character", clear_on_submit=True):
+        ch_id = st.text_input("角色 ID (英文)")
+        ch_name = st.text_input("顯示名稱")
+        ch_gender = st.selectbox("性別", ["female", "male", "non_binary"])
+        ch_orient = st.multiselect("性取向", ["heterosexual", "homosexual", "bisexual", "pansexual"], default=["heterosexual"])
+        ch_role = st.selectbox("定位", ["main_love_interest", "key_supporting_character"])
+        ch_identity = st.text_input("身分描述")
+        ch_tags = st.text_input("性格標籤 (逗號分隔)")
+        ch_favor = st.number_input("初始好感度", value=0)
+
+        # 呈現白名單多選區塊，供後續美術資源或事件引擎取用
+        st.markdown("**表情白名單**")
+        sel_emo = st.multiselect("選擇表情", [f"{e['label']} ({e['id']})" for e in EMOTION_PRESETS],
+                                  default=[f"{e['label']} ({e['id']})" for e in EMOTION_PRESETS[:3]])
+        st.markdown("**服裝白名單**")
+        sel_cos = st.multiselect("選擇服裝", [f"{c['label']} ({c['id']})" for c in COSTUME_PRESETS],
+                                  default=[f"{c['label']} ({c['id']})" for c in COSTUME_PRESETS[:2]])
+        st.markdown("**位置白名單**")
+        sel_pos = st.multiselect("選擇位置", [f"{p['label']} ({p['id']})" for p in POSITION_PRESETS],
+                                  default=[f"{p['label']} ({p['id']})" for p in POSITION_PRESETS])
+
+        if st.form_submit_button("新增角色"):
+            # 將多選選到的格式解析回 {"id": ..., "label": ...} 的字典結構
+            def _parse_presets(selected, presets):
+                return [{"id": p["id"], "label": p["label"]} for p in presets
+                        if f"{p['label']} ({p['id']})" in selected]
+
+            new_ch = {
+                "character_id": ch_id, "display_name": ch_name,
+                "gender": ch_gender, "orientation": ch_orient,
+                "role": ch_role, "identity": ch_identity,
+                "personality_tags": [t.strip() for t in ch_tags.split(",") if t.strip()],
+                "initial_favor": ch_favor, "schedule": [],
+                "allowed_emotions": _parse_presets(sel_emo, EMOTION_PRESETS),
+                "allowed_costumes": _parse_presets(sel_cos, COSTUME_PRESETS),
+                "allowed_positions": _parse_presets(sel_pos, POSITION_PRESETS),
+            }
+            st.session_state["characters"].append(new_ch)
+            st.rerun()
+
+    # --- Schedule 行程管理 ---
+    # 在角色建立後，可透過此區塊將行程綁定給對應角色
+    if st.session_state["characters"]:
+        st.subheader("新增角色行程")
+        vis_locs = _visitable_location_ids()
+        if not vis_locs:
+            st.warning("尚無可進入地點，請先在地點頁建立。")
+        else:
+            ch_names = [ch["character_id"] for ch in st.session_state["characters"]]
+            with st.form("add_schedule", clear_on_submit=True):
+                sch_char = st.selectbox("角色", ch_names)
+                sch_id = st.text_input("行程 ID (英文)")
+                sch_day = st.selectbox("日期類型", ["weekday", "weekend", "holiday", "specific_date", "any"])
+                sch_slot = st.selectbox("時間段", ["morning", "afternoon", "evening"])
+                sch_loc = st.selectbox("地點", vis_locs)
+                sch_prio = st.selectbox("優先權", ["normal", "route", "critical", "ambient"])
+                sch_order = st.number_input("排序值 (越小越優先)", value=20)
+                sch_cond = st.text_input("條件 (逗號分隔，可選)")
+                
+                if st.form_submit_button("新增行程"):
+                    entry = {
+                        "schedule_id": sch_id, "day_type": sch_day,
+                        "time_slot": sch_slot, "location_id": sch_loc,
+                        "priority": sch_prio, "schedule_order": int(sch_order),
+                        "condition": [c.strip() for c in sch_cond.split(",") if c.strip()],
+                    }
+                    # 找到指定的角色，將行程加入其 schedule 列表中
+                    for ch in st.session_state["characters"]:
+                        if ch["character_id"] == sch_char:
+                            ch["schedule"].append(entry)
+                    st.rerun()
+
+
+def _tab_flags():
+    """
+    渲染「旗標、狀態與結局」分頁。
+    用以定義影響遊戲流程的全域變數 (Flags)、持續性增益與減益狀態 (Status Flags)，
+    以及用來判定遊戲破關條件的各種結局 (Endings)。
+    """
+    st.header("5. 旗標、狀態與結局")
+
+    # --- Flags (全域變數) ---
+    st.subheader("旗標 (Flags)")
+    if st.session_state["flags"]:
+        for i, f in enumerate(st.session_state["flags"]):
+            st.write(f"• {f['flag_id']} ({f['type']}) = {f['initial_value']} — {f['description']}")
+            
+    with st.form("add_flag", clear_on_submit=True):
+        f_id = st.text_input("Flag ID")
+        f_type = st.selectbox("型別", ["boolean", "integer", "string", "enum"])
+        f_val = st.text_input("初始值", "false")
+        f_desc = st.text_input("說明")
+        if st.form_submit_button("新增 Flag"):
+            # 依據選擇的型別強制轉型初始值
+            val = f_val
+            if f_type == "boolean":
+                val = f_val.lower() == "true"
+            elif f_type == "integer":
+                val = int(f_val)
+            st.session_state["flags"].append({
+                "flag_id": f_id, "type": f_type,
+                "initial_value": val, "description": f_desc,
+            })
+            st.rerun()
+
+    # --- Status Flags (狀態效果) ---
+    st.subheader("狀態旗標 (Status Flags)")
+    if st.session_state["status_flags"]:
+        for sf in st.session_state["status_flags"]:
+            st.write(f"• {sf['status_id']} — {sf['description']}")
+            
+    with st.form("add_status_flag", clear_on_submit=True):
+        sf_id = st.text_input("Status ID")
+        sf_label = st.text_input("顯示名稱")
+        sf_target = st.text_input("作用對象", "protagonist")
+        sf_effect_key = st.text_input("效果 key (例: block_time_slot)")
+        sf_effect_val = st.text_input("效果 value (例: evening)")
+        sf_dur_type = st.selectbox("持續類型", ["time_slots", "days", "until_event", "until_cleared", "permanent"])
+        sf_dur_val = st.number_input("持續值", value=1)
+        # 解除條件必須多選，且若是 permanent 仍需要合理設定或保留為空 (依 schema 而定)
+        sf_clear = st.multiselect("解除條件", ["on_time_advance", "on_day_end", "on_rest", "on_item_used",
+                                                "on_event_result", "on_location_visit", "manual_only"])
+        sf_desc = st.text_input("說明")
+        sf_perm_reason = st.text_input("永久原因（若 permanent）", "")
+        
+        if st.form_submit_button("新增 Status Flag"):
+            entry = {
+                "status_id": sf_id, "label": sf_label, "target": sf_target,
+                "effect": [{sf_effect_key: sf_effect_val}] if sf_effect_key else [],
+                "duration": {"type": sf_dur_type, "value": sf_dur_val if sf_dur_type != "permanent" else None},
+                "clear_rule": sf_clear, "description": sf_desc,
+            }
+            if sf_perm_reason:
+                entry["permanent_reason"] = sf_perm_reason
+            st.session_state["status_flags"].append(entry)
+            st.rerun()
+
+    # --- Endings (結局定義) ---
+    st.subheader("結局 (Endings)")
+    if st.session_state["endings"]:
+        for e in st.session_state["endings"]:
+            st.write(f"• {e['ending_id']} — {e['title']}")
+            
+    with st.form("add_ending", clear_on_submit=True):
+        e_id = st.text_input("Ending ID")
+        e_title = st.text_input("結局標題")
+        e_type = st.text_input("結局類型 (例: character_good)")
+        ch_ids = [ch["character_id"] for ch in st.session_state["characters"]]
+        e_target = st.selectbox("關聯角色", [None, "global"] + ch_ids)
+        e_desc = st.text_input("結局描述")
+        e_req_flags = st.text_input("required_flags (逗號分隔)")
+        e_req_stats = st.text_input("required_stats (逗號分隔)")
+        e_forb_flags = st.text_input("forbidden_flags (逗號分隔)")
+        e_prio = st.selectbox("優先權", ["normal", "critical", "main", "route", "ambient"])
+        e_rtags = st.text_input("route_tags (逗號分隔)")
+        
+        if st.form_submit_button("新增結局"):
+            st.session_state["endings"].append({
+                "ending_id": e_id, "title": e_title, "ending_type": e_type,
+                "target_character_id": e_target if e_target else None,
+                "description": e_desc,
+                "required_flags": [x.strip() for x in e_req_flags.split(",") if x.strip()],
+                "required_stats": [x.strip() for x in e_req_stats.split(",") if x.strip()],
+                "forbidden_flags": [x.strip() for x in e_forb_flags.split(",") if x.strip()],
+                "priority": e_prio,
+                "route_tags": [x.strip() for x in e_rtags.split(",") if x.strip()],
+            })
+            st.rerun()
+
+
+def _tab_review():
+    """
+    渲染「預覽與匯出」分頁。
+    用以將前述表單收集到的 session_state 資料轉換為 SetupPackage，
+    並呼叫 UIWLinter 執行業務邏輯檢查，最後預覽並輸出 Markdown 檔案。
+    """
+    st.header("6. 預覽與匯出")
+
+    try:
+        pkg = _build_package()
+    except Exception as e:
+        # 當 Pydantic 型別驗證不通過或必填欄位缺失時，捕捉並顯示異常
+        st.error(f"資料建構失敗：{e}")
+        return
+
+    # --- Validate (業務邏輯與一致性驗證) ---
+    if st.button("驗證"):
+        linter = UIWLinter()
+        report = linter.validate(pkg)
+        if report.status == "passed":
+            st.success("驗證通過 ✅")
+        else:
+            st.error(f"驗證未通過 ❌ — {len(report.issues)} 個問題")
+        
+        # 逐一顯示 issue，以 error 或 warning 的顏色提示
+        for issue in report.issues:
+            if issue.severity == "error":
+                st.error(f"[{issue.type}] {issue.path}: {issue.message}")
+            else:
+                st.warning(f"[{issue.type}] {issue.path}: {issue.message}")
+
+    # --- YAML Preview ---
+    st.subheader("YAML 預覽")
+    # 將 Pydantic 模型轉出，移除 None 以減少冗長顯示
+    data = pkg.model_dump(mode="json", exclude_none=True)
+    yaml_text = yaml.dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    st.code(yaml_text, language="yaml")
+
+    # --- Export ---
+    st.subheader("匯出 Setup Package MD")
+    out_dir = st.text_input("輸出目錄", "examples")
+    if st.button("匯出"):
+        try:
+            # 依據新需求，按下匯出時必須顯示驗證狀態
+            linter = UIWLinter()
+            report = linter.validate(pkg)
+            
+            if report.status == "failed":
+                st.error("匯出失敗：資料驗證未通過 ❌")
+                st.warning("請修正以下主要問題：")
+                for issue in report.issues:
+                    if issue.severity == "error":
+                        st.error(f"[{issue.type}] {issue.path}: {issue.message}")
+                    else:
+                        st.warning(f"[{issue.type}] {issue.path}: {issue.message}")
+            else:
+                exporter = SetupPackageExporter(linter=linter)
+                # 透過 Exporter 包裝為 Markdown 格式寫入磁碟
+                filepath = exporter.write_file(pkg, Path(out_dir))
+                st.success(f"匯出成功！驗證狀態：passed ✅")
+                st.info(f"輸出檔案位置：{filepath.absolute()}")
+        except Exception as e:
+            st.error(f"發生未預期錯誤，匯出失敗：{e}")
+
+
+def main() -> None:
+    """
+    Interactive User Input Wizard prototype.
+
+    頁面流程：
+    1. World Meta
+    2. Protagonist
+    3. Locations & Map
+    4. Characters & Schedule
+    5. Flags / Status / Endings
+    6. Review & Export
+    """
+    st.set_page_config(page_title="Sandbox Dating Sim - UIW", layout="wide")
+    st.title("Sandbox Dating Sim — User Input Wizard")
+    _init_state()
+
+    tabs = st.tabs(["World", "Protagonist", "Locations", "Characters", "Flags/Status/Endings", "Review & Export"])
+    with tabs[0]:
+        _tab_world()
+    with tabs[1]:
+        _tab_protagonist()
+    with tabs[2]:
+        _tab_locations()
+    with tabs[3]:
+        _tab_characters()
+    with tabs[4]:
+        _tab_flags()
+    with tabs[5]:
+        _tab_review()
+
+
+if __name__ == "__main__":
+    main()
