@@ -4,6 +4,8 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.5 | 2026-04-28 | 補充 Phase 1-G-2 使用者操作回饋：主角 ID 固定隱藏、性別/性取向/定位 UI 選項中文化、主角預設年齡 29、角色性格標籤預設選項，以及自訂 canonical ID 欄位英文輸入說明。 |
+| v1.2.4 | 2026-04-28 | 補充 Phase 1-G-1 使用者操作回饋：UIW 分頁順序與中文/英文導覽顯示、每頁下一頁按鈕、已選風格中文顯示、主角職業/性格/秘密預設選項，以及初始債務等級模式。 |
 | v1.2.3 | 2026-04-27 | 明確規定 `required_flags` / `forbidden_flags` 必須使用 `flag.<id> == <value>` 完整表達式；明確 `status_flags.effect` 為 list of dict 並只在資料層要求非空。 |
 | v1.2.2 | 2026-04-27 | 補充 Phase 1-F UI 可先採用樸素表單與表格實作，完整地圖樹可留到 Dashboard 階段。 |
 | v1.2.1 | 2026-04-27 | 將 Setup Package 輸出的 `uiw_version` 統一為 `1.2`，並更新文件管線引用至 v1.1。 |
@@ -224,6 +226,14 @@ UI 行為：
 
 命名規則同 `world_id`。
 
+Phase 1-G-2 起，Interactive UIW 不顯示主角 ID 輸入欄位。主角 ID 在遊戲設計上固定為 `protagonist`，避免一般使用者誤改。
+
+輸出資料仍必須包含：
+
+```yaml
+protagonist_id: protagonist
+```
+
 ### 2.2 基本身分
 
 - UI Label: 主角姓名
@@ -251,6 +261,7 @@ UI 行為：
 - Field: `protagonist.age`
 - Type: integer
 - Required: true
+- UI Default: `29`
 
 - UI Label: 主角職業
 - Field: `protagonist.occupation`
@@ -289,14 +300,7 @@ initial_stats:
 - Type: boolean
 - Required: true
 
-若有債務，使用以下模式之一。
-
-#### 直接輸入模式
-
-```yaml
-debt_mode: fixed
-Debt: 50000
-```
+Phase 1-G-1 起，Interactive UIW 的初始債務設定使用等級模式。使用者在 UI 中選擇債務等級，系統將等級映射為 canonical `protagonist.initial_stats.Debt` 數值。
 
 #### 等級模式
 
@@ -308,26 +312,17 @@ Debt: auto_calculated_from_tier
 
 等級建議：
 
+- `none`: 無債務
 - `low`: 低債務
 - `medium`: 中債務
 - `high`: 高債務
 - `desperate`: 絕望級債務
 
-#### Seeded Random 模式
-
-```yaml
-debt_mode: seeded
-debt_seed: summer_city_2026_protagonist_debt
-debt_range:
-  min: 50000
-  max: 100000
-Debt: generated_and_saved
-```
-
 說明：
 
-- 不可使用不記錄結果的隱藏隨機值。
-- 若使用 seeded random，生成結果必須寫回設定檔。
+- `debt_tier` 屬 UI 收集策略，不一定需要寫入 Setup Package canonical schema。
+- Setup Package canonical data 只需保存已計算完成的 `Debt: int`。
+- 若後續需要保存 UI 草稿狀態，應另建 UI draft model，不污染 Setup Package canonical schema。
 
 ### 2.5 性格與秘密
 
@@ -347,6 +342,242 @@ Debt: generated_and_saved
 - 生成內心獨白
 - 建議初始 Flag
 - 影響特定事件與結局條件
+
+### 2.6 Phase 1-G-1 UI 操作回饋規格
+
+Phase 1-G-1 是使用者實際操作 Interactive UIW 後的第一批操作體驗調整。此階段不改變 Setup Package canonical schema，優先改善 UI 導覽、顯示文字與預設選項。
+
+#### 上方導覽順序
+
+上方設定項目的順序必須為：
+
+```text
+World
+-> Protagonist
+-> Characters
+-> Locations
+-> Flags/Status/Endings
+-> Review & Export
+```
+
+#### 上方導覽顯示文字
+
+上方設定項目必須顯示為「中文名稱(英文名稱)」：
+
+```text
+世界觀與曆法(World)
+主角設定(Protagonist)
+角色設定(Characters)
+地點與地圖(Locations)
+旗標/狀態/結局(Flags/Status/Endings)
+預覽與匯出(Review & Export)
+```
+
+#### 下一頁按鈕
+
+每一個設定頁面的最下面都必須新增「下一頁」按鈕。點擊後，UI 應移動到下一個設定項目。
+
+例外：
+
+- `Review & Export` 是最後一頁，不需要「下一頁」按鈕。
+
+#### 已選風格顯示
+
+`世界觀與曆法` 頁面最下面的「已選風格：」後方，已選項目必須顯示中文 label。
+
+資料保存仍使用英文 canonical ID。
+
+範例：
+
+```yaml
+global_style:
+  - urban_romance
+  - black_humor
+```
+
+UI 顯示：
+
+```text
+已選風格：都市戀愛、黑色幽默
+```
+
+#### 主角欄位預設選項
+
+`主角設定` 頁面的以下欄位必須提供 6-12 個可點選預設選項：
+
+- 職業
+- 性格描述
+- 主角的秘密
+
+預設選項必須顯示中文 label，寫入資料模型時使用英文 canonical ID 或使用者手動輸入的自訂值。
+
+範例：
+
+```yaml
+occupation_presets:
+  - id: student
+    label: 學生
+  - id: part_time_worker
+    label: 打工族
+
+personality_presets:
+  - id: kind_but_tired
+    label: 善良但疲憊
+
+secret_presets:
+  - id: family_debt
+    label: 背負家族債務
+```
+
+#### 初始債務等級
+
+Interactive UIW 不提供任意金額輸入作為主要流程，改提供債務等級選單。
+
+建議映射：
+
+```yaml
+debt_tiers:
+  - id: none
+    label: 無債務
+    Debt: 0
+  - id: low
+    label: 低債務
+    Debt: 10000
+  - id: medium
+    label: 中債務
+    Debt: 50000
+  - id: high
+    label: 高債務
+    Debt: 120000
+  - id: desperate
+    label: 絕望級債務
+    Debt: 300000
+```
+
+### 2.7 Phase 1-G-2 UI 操作回饋規格
+
+Phase 1-G-2 是使用者實際操作 Interactive UIW 後的第二批操作體驗調整。此階段不改變 Setup Package canonical schema，優先簡化不必要欄位、降低英文 ID 暴露量，並補足自訂 ID 的輸入說明。
+
+#### 主角 ID 固定隱藏
+
+主角 ID 固定為 `protagonist`，Interactive UIW 不需要顯示主角 ID 輸入欄位。
+
+規則：
+
+- UI 不顯示 `protagonist.protagonist_id`。
+- 系統建構 Setup Package 時自動填入 `protagonist`。
+- 匯出的 Setup Package 仍保留 `protagonist_id: protagonist`。
+
+#### 主角預設年齡
+
+主角年齡的 UI 預設值改為 `29`。
+
+使用者仍可手動調整年齡。
+
+#### 選項中文化
+
+主角或角色相關 enum 欄位在 UI 中顯示中文 label，不直接顯示英文 ID。
+
+適用欄位：
+
+- 主角性別 `protagonist.gender`
+- 角色性別 `characters[].gender`
+- 角色性取向 `characters[].orientation`
+- 角色定位 `characters[].role`
+
+資料保存仍使用英文 canonical ID。
+
+範例：
+
+```yaml
+gender_options:
+  - id: male
+    label: 男性
+  - id: female
+    label: 女性
+  - id: non_binary
+    label: 非二元
+
+orientation_options:
+  - id: heterosexual
+    label: 異性戀
+  - id: homosexual
+    label: 同性戀
+  - id: bisexual
+    label: 雙性戀
+  - id: pansexual
+    label: 全性戀
+
+role_options:
+  - id: main_love_interest
+    label: 主要攻略對象
+  - id: key_supporting_character
+    label: 關鍵配角
+```
+
+#### 角色性格標籤預設選項
+
+角色的 `personality_tags` 欄位必須提供可點選預設選項。
+
+預設選項顯示中文 label，寫入資料模型時保存英文 canonical ID。
+
+範例：
+
+```yaml
+character_personality_tag_presets:
+  - id: guarded
+    label: 戒心重
+  - id: proud
+    label: 自尊心強
+  - id: secretly_kind
+    label: 其實很溫柔
+  - id: cheerful
+    label: 開朗
+  - id: cynical
+    label: 犬儒
+  - id: diligent
+    label: 認真努力
+```
+
+使用者仍可新增自訂性格標籤，但自訂值必須符合 canonical ID 規則。
+
+#### 自訂 ID 輸入說明
+
+凡是 UI 欄位名稱包含 `ID`，或輸入值會作為 canonical ID / tag 寫入 Setup Package 時，自訂輸入必須使用英文 canonical ID。
+
+規則：
+
+- 小寫英文、數字、底線。
+- 必須以英文字母開頭。
+- 不可使用中文。
+- 不可使用空格。
+
+UI 必須在相關欄位旁顯示說明文字。
+
+建議文案：
+
+```text
+請輸入英文 ID：小寫英文、數字、底線，且必須以英文字母開頭。
+中文名稱或描述請填在顯示名稱、描述或秘密等文字欄位。
+```
+
+適用範例：
+
+- 自訂職業 ID
+- 自訂性格 ID
+- 自訂性格標籤 ID
+- 自訂風格 ID
+- 自訂地點 ID
+- 自訂角色 ID
+
+純顯示或敘事文字欄位可使用中文，例如：
+
+- 主角姓名
+- 角色顯示名稱
+- 地點名稱
+- 身分描述
+- 秘密描述
+- 結局描述
 
 ---
 
@@ -745,6 +976,8 @@ empty_behavior:
 - Field: `characters[].personality_tags`
 - Type: string array
 - Required: true
+
+Phase 1-G-2 起，Interactive UIW 應提供角色性格標籤預設選項。UI 顯示中文 label，寫入 `personality_tags` 時保存英文 canonical ID。
 
 - UI Label: 秘密
 - Field: `characters[].secret`

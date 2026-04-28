@@ -15,7 +15,21 @@ from sandbox_dating_sim.pipeline.setup_exporter import SetupPackageExporter
 from sandbox_dating_sim.uiw.defaults import (
     STYLE_PRESETS, LOCATION_TEMPLATES, SUB_LOCATION_TEMPLATES,
     EMOTION_PRESETS, COSTUME_PRESETS, POSITION_PRESETS,
+    PROTAGONIST_OCCUPATION_PRESETS, PROTAGONIST_PERSONALITY_PRESETS,
+    PROTAGONIST_SECRET_PRESETS, DEBT_TIER_PRESETS,
+    GENDER_OPTIONS, ORIENTATION_OPTIONS, ROLE_OPTIONS,
+    CHARACTER_PERSONALITY_TAG_PRESETS, PROTAGONIST_DEFAULT_AGE,
 )
+
+
+PAGE_LABELS = [
+    "世界觀與曆法(World)",
+    "主角設定(Protagonist)",
+    "角色設定(Characters)",
+    "地點與地圖(Locations)",
+    "旗標/狀態/結局(Flags/Status/Endings)",
+    "預覽與匯出(Review & Export)",
+]
 
 
 def _init_state():
@@ -28,9 +42,11 @@ def _init_state():
         "start_date": date(2026, 4, 27), "end_date": date(2026, 5, 26),
         "global_style": [],
         "protag_id": "protagonist", "protag_name": "主角",
-        "protag_gender": "male", "protag_age": 18,
-        "protag_occupation": "student", "protag_personality": "friendly",
+        "protag_gender": "male", "protag_age": PROTAGONIST_DEFAULT_AGE,
+        "protag_occupation": "student", "protag_personality": "kind_but_tired",
         "protag_secret": "",
+        "debt_tier": "none",
+        "active_page_label": PAGE_LABELS[0],
         "INT": 5, "CHA": 5, "STR": 5, "MORAL": 5, "Cash": 3000, "Debt": 0,
         "locations": [], "characters": [], "flags": [],
         "status_flags": [], "endings": [],
@@ -39,6 +55,38 @@ def _init_state():
         if k not in st.session_state:
             st.session_state[k] = v
 
+
+
+def _preset_label(value: str, presets: list[dict]) -> str:
+    """將 canonical ID 轉回 UI 顯示用中文 label。"""
+    for preset in presets:
+        if preset["id"] == value:
+            return preset["label"]
+    return value
+
+
+def _preset_button_grid(state_key: str, presets: list[dict], key_prefix: str, columns: int = 4) -> None:
+    """用按鈕顯示一組預設選項，點選後寫入 session state。"""
+    cols = st.columns(columns)
+    for i, preset in enumerate(presets):
+        with cols[i % columns]:
+            if st.button(preset["label"], key=f"{key_prefix}_{preset['id']}"):
+                st.session_state[state_key] = preset["id"]
+                st.rerun()
+
+
+def _go_to_page(label: str) -> None:
+    """切換目前設定頁。"""
+    st.session_state["active_page_label"] = label
+
+
+def _next_page_button(current_label: str) -> None:
+    """在頁面底部顯示前往下一個設定項目的按鈕。"""
+    current_index = PAGE_LABELS.index(current_label)
+    if current_index < len(PAGE_LABELS) - 1:
+        next_label = PAGE_LABELS[current_index + 1]
+        st.divider()
+        st.button("下一頁", on_click=_go_to_page, args=(next_label,), use_container_width=True)
 
 
 def _build_package() -> SetupPackage:
@@ -117,23 +165,50 @@ def _tab_world():
 
     # 顯示已選擇的風格，並提供清除按鈕
     if st.session_state["global_style"]:
-        st.write("已選風格：", ", ".join(st.session_state["global_style"]))
+        selected_style_labels = [
+            _preset_label(style_id, STYLE_PRESETS) for style_id in st.session_state["global_style"]
+        ]
+        st.write("已選風格：", "、".join(selected_style_labels))
         if st.button("清除所有風格"):
             st.session_state["global_style"] = []
+            st.rerun()
+
+    _next_page_button(PAGE_LABELS[0])
 
 
 def _tab_protagonist():
     """渲染「主角設定」分頁的 UI 元件，包含基本身分與初始六維數值。"""
     st.header("2. 主角設定")
     
-    # 收集主角基本資料
-    st.session_state["protag_id"] = st.text_input("主角 ID", st.session_state["protag_id"])
+    # 收集主角基本資料 (主角 ID 依 1-G-2 需求不再顯示，固定為 protagonist)
     st.session_state["protag_name"] = st.text_input("主角姓名", st.session_state["protag_name"])
-    st.session_state["protag_gender"] = st.selectbox("性別", ["male", "female", "non_binary"],
-        index=["male", "female", "non_binary"].index(st.session_state["protag_gender"]))
+    
+    gender_ids = [g["id"] for g in GENDER_OPTIONS]
+    selected_gender = st.selectbox(
+        "性別",
+        gender_ids,
+        index=gender_ids.index(st.session_state["protag_gender"]) if st.session_state["protag_gender"] in gender_ids else 0,
+        format_func=lambda value: _preset_label(value, GENDER_OPTIONS)
+    )
+    st.session_state["protag_gender"] = selected_gender
     st.session_state["protag_age"] = st.number_input("年齡", 1, 100, st.session_state["protag_age"])
-    st.session_state["protag_occupation"] = st.text_input("職業", st.session_state["protag_occupation"])
-    st.session_state["protag_personality"] = st.text_input("性格描述", st.session_state["protag_personality"])
+    st.subheader("職業")
+    _preset_button_grid("protag_occupation", PROTAGONIST_OCCUPATION_PRESETS, "occupation")
+    st.caption(f"目前選擇：{_preset_label(st.session_state['protag_occupation'], PROTAGONIST_OCCUPATION_PRESETS)}")
+    st.session_state["protag_occupation"] = st.text_input(
+        "自訂職業 ID（英文，小寫英文/數字/底線）", st.session_state["protag_occupation"]
+    )
+
+    st.subheader("性格描述")
+    _preset_button_grid("protag_personality", PROTAGONIST_PERSONALITY_PRESETS, "personality")
+    st.caption(f"目前選擇：{_preset_label(st.session_state['protag_personality'], PROTAGONIST_PERSONALITY_PRESETS)}")
+    st.session_state["protag_personality"] = st.text_input(
+        "自訂性格 ID（英文，小寫英文/數字/底線）", st.session_state["protag_personality"]
+    )
+
+    st.subheader("主角的秘密")
+    _preset_button_grid("protag_secret", PROTAGONIST_SECRET_PRESETS, "secret")
+    st.caption(f"目前選擇：{_preset_label(st.session_state['protag_secret'], PROTAGONIST_SECRET_PRESETS)}")
     st.session_state["protag_secret"] = st.text_area("主角的秘密（可選）", st.session_state["protag_secret"])
 
     st.subheader("初始數值")
@@ -147,7 +222,21 @@ def _tab_protagonist():
         st.session_state["MORAL"] = st.slider("MORAL 道德", 1, 10, st.session_state["MORAL"])
     with c3:
         st.session_state["Cash"] = st.number_input("初始現金", 0, 100000, st.session_state["Cash"])
-        st.session_state["Debt"] = st.number_input("初始債務", 0, 1000000, st.session_state["Debt"])
+        debt_tier_ids = [tier["id"] for tier in DEBT_TIER_PRESETS]
+        if st.session_state["debt_tier"] not in debt_tier_ids:
+            st.session_state["debt_tier"] = "none"
+        selected_debt_tier = st.selectbox(
+            "初始債務等級",
+            debt_tier_ids,
+            index=debt_tier_ids.index(st.session_state["debt_tier"]),
+            format_func=lambda value: _preset_label(value, DEBT_TIER_PRESETS),
+        )
+        st.session_state["debt_tier"] = selected_debt_tier
+        selected_tier = next(tier for tier in DEBT_TIER_PRESETS if tier["id"] == selected_debt_tier)
+        st.session_state["Debt"] = selected_tier["debt"]
+        st.metric("初始債務", st.session_state["Debt"])
+
+    _next_page_button(PAGE_LABELS[1])
 
 
 def _tab_locations():
@@ -241,6 +330,8 @@ def _tab_locations():
             st.session_state["locations"].append(new_loc)
             st.rerun()
 
+    _next_page_button(PAGE_LABELS[3])
+
 
 def _tab_characters():
     """
@@ -263,11 +354,26 @@ def _tab_characters():
     with st.form("add_character", clear_on_submit=True):
         ch_id = st.text_input("角色 ID (英文)")
         ch_name = st.text_input("顯示名稱")
-        ch_gender = st.selectbox("性別", ["female", "male", "non_binary"])
-        ch_orient = st.multiselect("性取向", ["heterosexual", "homosexual", "bisexual", "pansexual"], default=["heterosexual"])
-        ch_role = st.selectbox("定位", ["main_love_interest", "key_supporting_character"])
+        
+        gender_ids = [g["id"] for g in GENDER_OPTIONS]
+        ch_gender = st.selectbox("性別", gender_ids, format_func=lambda x: _preset_label(x, GENDER_OPTIONS))
+        
+        orient_ids = [o["id"] for o in ORIENTATION_OPTIONS]
+        ch_orient = st.multiselect("性取向", orient_ids, default=["heterosexual"], format_func=lambda x: _preset_label(x, ORIENTATION_OPTIONS))
+        
+        role_ids = [r["id"] for r in ROLE_OPTIONS]
+        ch_role = st.selectbox("定位", role_ids, format_func=lambda x: _preset_label(x, ROLE_OPTIONS))
+        
         ch_identity = st.text_input("身分描述")
-        ch_tags = st.text_input("性格標籤 (逗號分隔)")
+        
+        st.markdown("**性格標籤**")
+        sel_tags = st.multiselect(
+            "選擇預設性格標籤",
+            [f"{t['label']} ({t['id']})" for t in CHARACTER_PERSONALITY_TAG_PRESETS],
+            default=[]
+        )
+        ch_custom_tags = st.text_input("自訂性格標籤 ID（英文，小寫英文/數字/底線，逗號分隔）")
+        
         ch_favor = st.number_input("初始好感度", value=0)
 
         # 呈現白名單多選區塊，供後續美術資源或事件引擎取用
@@ -287,11 +393,15 @@ def _tab_characters():
                 return [{"id": p["id"], "label": p["label"]} for p in presets
                         if f"{p['label']} ({p['id']})" in selected]
 
+            # 合併預設選擇的 tag ID 與手動輸入的 tag ID
+            final_tags = [p["id"] for p in CHARACTER_PERSONALITY_TAG_PRESETS if f"{p['label']} ({p['id']})" in sel_tags]
+            final_tags.extend([t.strip() for t in ch_custom_tags.split(",") if t.strip()])
+
             new_ch = {
                 "character_id": ch_id, "display_name": ch_name,
                 "gender": ch_gender, "orientation": ch_orient,
                 "role": ch_role, "identity": ch_identity,
-                "personality_tags": [t.strip() for t in ch_tags.split(",") if t.strip()],
+                "personality_tags": final_tags,
                 "initial_favor": ch_favor, "schedule": [],
                 "allowed_emotions": _parse_presets(sel_emo, EMOTION_PRESETS),
                 "allowed_costumes": _parse_presets(sel_cos, COSTUME_PRESETS),
@@ -331,6 +441,8 @@ def _tab_characters():
                         if ch["character_id"] == sch_char:
                             ch["schedule"].append(entry)
                     st.rerun()
+
+    _next_page_button(PAGE_LABELS[2])
 
 
 def _tab_flags():
@@ -429,6 +541,8 @@ def _tab_flags():
             })
             st.rerun()
 
+    _next_page_button(PAGE_LABELS[4])
+
 
 def _tab_review():
     """
@@ -511,18 +625,24 @@ def main() -> None:
     st.title("Sandbox Dating Sim — User Input Wizard")
     _init_state()
 
-    tabs = st.tabs(["World", "Protagonist", "Locations", "Characters", "Flags/Status/Endings", "Review & Export"])
-    with tabs[0]:
+    selected_page = st.radio(
+        "設定頁面",
+        PAGE_LABELS,
+        key="active_page_label",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    if selected_page == PAGE_LABELS[0]:
         _tab_world()
-    with tabs[1]:
+    elif selected_page == PAGE_LABELS[1]:
         _tab_protagonist()
-    with tabs[2]:
-        _tab_locations()
-    with tabs[3]:
+    elif selected_page == PAGE_LABELS[2]:
         _tab_characters()
-    with tabs[4]:
+    elif selected_page == PAGE_LABELS[3]:
+        _tab_locations()
+    elif selected_page == PAGE_LABELS[4]:
         _tab_flags()
-    with tabs[5]:
+    else:
         _tab_review()
 
 
