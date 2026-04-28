@@ -13,21 +13,24 @@ class SetupPackageExporter:
         self.linter = linter or UIWLinter()
 
     def to_markdown(self, package: SetupPackage) -> str:
+        # 使用深拷貝，不修改原始 package
+        pkg = package.model_copy(deep=True)
+
         # 計算 total_days
-        if package.world.total_days is None:
-            delta = package.world.end_date - package.world.start_date
-            package.world.total_days = delta.days + 1
+        if pkg.world.total_days is None:
+            delta = pkg.world.end_date - pkg.world.start_date
+            pkg.world.total_days = delta.days + 1
 
         # 執行 UIW Linter
-        report = self.linter.validate(package)
-        package.validation_report = report
+        report = self.linter.validate(pkg)
+        pkg.validation_report = report
 
         # serialize 成 YAML
-        data = package.model_dump(mode="json", exclude_none=True)
+        data = pkg.model_dump(mode="json", exclude_none=True)
         yaml_text = yaml.dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
-        
+
         # 包成 Markdown
-        return wrap_yaml_markdown(f"Setup Package: {package.world.title}", yaml_text)
+        return wrap_yaml_markdown(f"Setup Package: {pkg.world.title}", yaml_text)
 
     def write_file(self, package: SetupPackage, output_dir: Path) -> Path:
         """

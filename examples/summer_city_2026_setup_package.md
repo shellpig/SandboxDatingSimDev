@@ -1,0 +1,163 @@
+# Setup Package: 夏日債務街
+
+```yaml
+setup_package_version: '1.0'
+uiw_version: '1.2'
+target_game_spec_version: '1.2'
+world:
+  world_id: summer_city_2026
+  title: 夏日債務街
+  start_date: '2026-04-27'
+  end_date: '2026-05-26'
+  time_slots:
+  - morning
+  - afternoon
+  - evening
+  total_days: 30
+  global_style:
+  - urban_romance
+  - black_humor
+protagonist:
+  protagonist_id: protagonist
+  name: 佑介
+  gender: male
+  age: 20
+  occupation: student
+  initial_stats:
+    INT: 5
+    CHA: 6
+    STR: 4
+    MORAL: 5
+    Cash: 3000
+    Debt: 50000
+  personality: friendly
+locations:
+- location_id: school
+  name: 學校
+  location_type: container
+  is_visitable: false
+  base_cost: 0
+  available_time_slots:
+  - morning
+  - afternoon
+  tags:
+  - school
+  - public
+  unlock_conditions: []
+  closed_conditions: []
+  map_priority: high
+  map_display_group: campus
+  default_npc_capacity: 10
+  empty_behavior: hidden
+- location_id: school_library
+  name: 圖書室
+  location_type: sub_location
+  parent_location_id: school
+  is_visitable: true
+  base_cost: 0
+  available_time_slots:
+  - morning
+  - afternoon
+  tags:
+  - indoor
+  - study
+  unlock_conditions:
+  - day >= 1
+  closed_conditions: []
+  map_priority: normal
+  map_display_group: campus
+  default_npc_capacity: 4
+  empty_behavior: show_ambient_text
+  ambient_text: 圖書室裡很安靜，書頁翻動的聲音比腳步聲還清楚。
+characters:
+- character_id: sophie
+  display_name: 蘇菲
+  gender: female
+  orientation:
+  - heterosexual
+  role: main_love_interest
+  identity: 主角的同班同學
+  personality_tags:
+  - guarded
+  - secretly_kind
+  initial_favor: 0
+  schedule:
+  - schedule_id: sophie_weekday_morning
+    day_type: weekday
+    time_slot: morning
+    location_id: school_library
+    condition:
+    - day >= 1
+    priority: normal
+    schedule_order: 20
+  allowed_emotions:
+  - id: neutral
+    label: 平常
+  - id: happy
+    label: 開心
+  - id: embarrassed
+    label: 害羞
+  allowed_costumes:
+  - id: school_uniform
+    label: 校服
+  - id: casual
+    label: 私服
+  allowed_positions:
+  - id: center
+    label: 中
+flags:
+- flag_id: sophie_route_started
+  type: boolean
+  initial_value: false
+  description: 蘇菲路線是否已開始。
+status_flags:
+- status_id: overworked
+  label: 過勞
+  target: protagonist
+  effect:
+  - block_time_slot: evening
+  duration:
+    type: time_slots
+    value: 1
+  clear_rule:
+  - on_time_advance
+  - on_rest
+  description: 主角太累，晚上無法外出。
+endings:
+- ending_id: sophie_good_ending
+  title: 蘇菲 Good Ending
+  ending_type: character_good
+  target_character_id: sophie
+  description: 主角與蘇菲互相理解，並一起面對債務與家庭問題。
+  required_flags:
+  - flag.sophie_route_started == true
+  required_stats:
+  - character.sophie.favor >= 80
+  forbidden_flags: []
+  priority: critical
+  route_tags:
+  - character_route:sophie
+  - critical
+  - ending_prerequisite
+asset_vocabularies:
+  allowed_bgms:
+  - id: park_afternoon
+    label: 公園午後
+  allowed_backgrounds:
+  - id: school_library_day
+    label: 圖書室白天
+  allowed_sfx: []
+  allowed_cgs: []
+alias_tables:
+  emotion_aliases:
+    平常: neutral
+    開心: happy
+    害羞: embarrassed
+    臉紅: embarrassed
+  costume_aliases:
+    校服: school_uniform
+    私服: casual
+validation_report:
+  status: passed
+  issues: []
+```
