@@ -8,7 +8,7 @@ from sandbox_dating_sim.uiw.defaults import (
     POSITION_PRESETS,
     PROTAGONIST_OCCUPATION_PRESETS,
     PROTAGONIST_PERSONALITY_PRESETS,
-    PROTAGONIST_SECRET_PRESETS,
+    SECRET_PRESETS,
     DEBT_TIER_PRESETS,
     GENDER_OPTIONS,
     ORIENTATION_OPTIONS,
@@ -91,12 +91,12 @@ def test_position_presets_have_id_and_label():
     [
         PROTAGONIST_OCCUPATION_PRESETS,
         PROTAGONIST_PERSONALITY_PRESETS,
-        PROTAGONIST_SECRET_PRESETS,
+        SECRET_PRESETS,
     ],
 )
 def test_protagonist_presets_have_usable_range_and_labels(presets):
-    """1-G-1 主角預設選項每組應提供 6-12 個可點選項目。"""
-    assert 6 <= len(presets) <= 12
+    """1-G-3 主角預設選項每組應提供 6-16 個可點選項目。"""
+    assert 6 <= len(presets) <= 16
     ids = [preset["id"] for preset in presets]
     assert len(ids) == len(set(ids))
     for preset in presets:

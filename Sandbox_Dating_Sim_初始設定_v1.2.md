@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.7 | 2026-05-01 | 補充 Phase 1-G-3 完成後規則：`none = 沒有秘密` 僅為 UI 清空操作，canonical data 以 `secrets: []` 表示沒有秘密；記錄 1-G-3 實作完成項目。 |
 | v1.2.6 | 2026-05-01 | 補充 Phase 1-G-3：語意型欄位改為保存 `id + label`；主角與 NPC 秘密改為最多 3 個複選；新增職業與秘密預設選項；改善中文自訂輸入與系統 ID 欄位。 |
 | v1.2.5 | 2026-04-28 | 補充 Phase 1-G-2 使用者操作回饋：主角 ID 固定隱藏、性別/性取向/定位 UI 選項中文化、主角預設年齡 29、角色性格標籤預設選項，以及自訂 canonical ID 欄位英文輸入說明。 |
 | v1.2.4 | 2026-04-28 | 補充 Phase 1-G-1 使用者操作回饋：UIW 分頁順序與中文/英文導覽顯示、每頁下一頁按鈕、已選風格中文顯示、主角職業/性格/秘密預設選項，以及初始債務等級模式。 |
@@ -698,7 +699,10 @@ characters[].secrets:
 - 可新增自訂中文秘密。
 - 每個秘密保存 `id + label`。
 - UI 必須清楚顯示目前已選秘密。
-- `none = 沒有秘密` 若被選取，不可與其他秘密並存。
+- `none = 沒有秘密` 是 UI 清空操作，點選後應清空秘密清單。
+- Setup Package 中沒有秘密時必須保存為 `secrets: []`，不得保存 `{id: none, label: 沒有秘密}`。
+
+AI 生成劇情時，`secrets: []` 表示使用者未指定秘密，不應自行把 `none` 解讀成角色秘密或伏筆。若後續事件需要「沒有秘密」作為條件，應使用獨立 flag，而不是在 `secrets` 中保存 `none`。
 
 新增 8 個秘密預設：
 
@@ -729,9 +733,20 @@ UIW Linter 需新增或調整：
 - 語意型欄位的 `label` 不可為空。
 - `protagonist.secrets` 最多 3 個。
 - `characters[].secrets` 最多 3 個。
-- `none` 不可和其他秘密同時存在。
+- `none` 不寫入 canonical data；UI 點選「沒有秘密」時應清空 secrets list。
 - `characters[].personality_tags[].id` 不可重複。
 - `world.global_style[].id` 不可重複。
+
+#### Phase 1-G-3 完成紀錄
+
+Phase 1-G-3 已完成下列項目：
+
+- Setup Package schema 將語意型欄位升級為 `SemanticChoice` 或 `list[SemanticChoice]`。
+- UIW 可用中文預設選項與中文自訂輸入建立語意型欄位，並產生合法 canonical ID。
+- 主角與 NPC 秘密支援最多 3 個複選；「沒有秘密」清空秘密清單並輸出 `secrets: []`。
+- 角色性格標籤與 NPC 秘密已移出 Streamlit form，避免 `st.button()` 與 `st.form()` 衝突。
+- UIW Linter 已驗證語意型欄位 ID 格式、空 label、重複 ID、秘密上限與 `none` 衝突。
+- exporter / parser roundtrip 保留中文 label。
 
 ---
 

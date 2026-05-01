@@ -101,3 +101,84 @@ def test_linter_rejects_unknown_forbidden_flag():
     report = linter.validate(pkg)
     assert report.status == "failed"
     assert any(i.type == "unknown_flag" for i in report.issues)
+
+
+# ─── 1-G-3 Tests ────────────────────────────────────────────────────────────
+
+from sandbox_dating_sim.schema.setup import SemanticChoice
+
+
+def test_linter_rejects_protagonist_secrets_over_3():
+    """protagonist.secrets 超過 3 個時應產生 error。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.protagonist.secrets = [
+        SemanticChoice(id="s1", label="秘密一"),
+        SemanticChoice(id="s2", label="秘密二"),
+        SemanticChoice(id="s3", label="秘密三"),
+        SemanticChoice(id="s4", label="秘密四"),
+    ]
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "secrets_exceeds_max" for i in report.issues)
+
+
+def test_linter_rejects_character_secrets_over_3():
+    """characters[].secrets 超過 3 個時應產生 error。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.characters[0].secrets = [
+        SemanticChoice(id="s1", label="秘密一"),
+        SemanticChoice(id="s2", label="秘密二"),
+        SemanticChoice(id="s3", label="秘密三"),
+        SemanticChoice(id="s4", label="秘密四"),
+    ]
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "secrets_exceeds_max" for i in report.issues)
+
+
+def test_linter_rejects_none_secret_with_others_protagonist():
+    """protagonist.secrets 中 none 與其他秘密並存應產生 error。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.protagonist.secrets = [
+        SemanticChoice(id="none", label="沒有秘密"),
+        SemanticChoice(id="family_debt", label="背負家族債務"),
+    ]
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "none_secret_conflict" for i in report.issues)
+
+
+def test_linter_rejects_none_secret_with_others_character():
+    """characters[].secrets 中 none 與其他秘密並存應產生 error。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.characters[0].secrets = [
+        SemanticChoice(id="none", label="沒有秘密"),
+        SemanticChoice(id="hidden_wealth", label="其實家境富裕"),
+    ]
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "none_secret_conflict" for i in report.issues)
+
+
+def test_linter_rejects_duplicate_global_style_id():
+    """world.global_style 有重複 id 時應產生 error。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.world.global_style.append(SemanticChoice(id="urban_romance", label="都市戀愛"))
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "duplicate_global_style_id" for i in report.issues)
+
+
+def test_linter_rejects_duplicate_personality_tag_id():
+    """characters[].personality_tags 有重複 id 時應產生 error。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.characters[0].personality_tags.append(SemanticChoice(id="guarded", label="戒心重"))
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "duplicate_personality_tag_id" for i in report.issues)

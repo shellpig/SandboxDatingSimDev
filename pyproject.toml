@@ -8,6 +8,7 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "streamlit>=1.37",
+    "pypinyin>=0.55.0",
 ]
 
 [project.optional-dependencies]

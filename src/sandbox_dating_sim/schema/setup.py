@@ -15,6 +15,10 @@ FlagType = Literal["boolean", "integer", "string", "enum"]
 DurationType = Literal["time_slots", "days", "until_event", "until_cleared", "permanent"]
 ClearRule = Literal["on_time_advance", "on_day_end", "on_rest", "on_item_used", "on_event_result", "on_location_visit", "manual_only"]
 
+class SemanticChoice(BaseModel):
+    id: str
+    label: str
+
 class World(BaseModel):
     world_id: str
     title: str
@@ -22,7 +26,7 @@ class World(BaseModel):
     end_date: date
     time_slots: list[TimeSlot]
     total_days: int | None = None
-    global_style: list[str] = []
+    global_style: list[SemanticChoice] = []
 
 class InitialStats(BaseModel):
     INT: int
@@ -37,10 +41,10 @@ class Protagonist(BaseModel):
     name: str
     gender: Gender
     age: int
-    occupation: str
+    occupation: SemanticChoice
     initial_stats: InitialStats
-    personality: str
-    secret: str | None = None
+    personality: SemanticChoice
+    secrets: list[SemanticChoice] = []
 
 class Location(BaseModel):
     location_id: str
@@ -79,8 +83,8 @@ class Character(BaseModel):
     orientation: list[Orientation]
     role: str
     identity: str
-    personality_tags: list[str]
-    secret: str | None = None
+    personality_tags: list[SemanticChoice]
+    secrets: list[SemanticChoice] = []
     initial_favor: int = 0
     schedule: list[ScheduleEntry] = []
     allowed_emotions: list[AssetOption]

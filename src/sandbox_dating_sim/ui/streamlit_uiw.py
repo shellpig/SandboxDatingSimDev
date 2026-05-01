@@ -2,11 +2,13 @@
 
 import streamlit as st
 import yaml
+import re
+import pypinyin
 from datetime import date
 from pathlib import Path
 
 from sandbox_dating_sim.schema.setup import (
-    SetupPackage, World, Protagonist, InitialStats, Location,
+    SetupPackage, World, Protagonist, InitialStats, Location, SemanticChoice,
     Character, ScheduleEntry, AssetOption, FlagDef, StatusFlag,
     StatusDuration, Ending,
 )
@@ -16,7 +18,7 @@ from sandbox_dating_sim.uiw.defaults import (
     STYLE_PRESETS, LOCATION_TEMPLATES, SUB_LOCATION_TEMPLATES,
     EMOTION_PRESETS, COSTUME_PRESETS, POSITION_PRESETS,
     PROTAGONIST_OCCUPATION_PRESETS, PROTAGONIST_PERSONALITY_PRESETS,
-    PROTAGONIST_SECRET_PRESETS, DEBT_TIER_PRESETS,
+    SECRET_PRESETS, DEBT_TIER_PRESETS,
     GENDER_OPTIONS, ORIENTATION_OPTIONS, ROLE_OPTIONS,
     CHARACTER_PERSONALITY_TAG_PRESETS, PROTAGONIST_DEFAULT_AGE,
 )
@@ -43,8 +45,9 @@ def _init_state():
         "global_style": [],
         "protag_id": "protagonist", "protag_name": "主角",
         "protag_gender": "male", "protag_age": PROTAGONIST_DEFAULT_AGE,
-        "protag_occupation": "student", "protag_personality": "kind_but_tired",
-        "protag_secret": "",
+        "protag_occupation": {"id": "student", "label": "學生"},
+        "protag_personality": {"id": "kind_but_tired", "label": "善良但疲憊"},
+        "protag_secrets": [],
         "debt_tier": "none",
         "active_page_label": PAGE_LABELS[0],
         "INT": 5, "CHA": 5, "STR": 5, "MORAL": 5, "Cash": 3000, "Debt": 0,
@@ -75,6 +78,134 @@ def _preset_button_grid(state_key: str, presets: list[dict], key_prefix: str, co
                 st.rerun()
 
 
+
+def _generate_system_id(label: str) -> str:
+    """從中文標籤產生合法的英文/拼音 ID（^[a-z][a-z0-9_]*$）"""
+    if not label:
+        return "custom_empty"
+    if re.match(r"^[a-zA-Z0-9_ ]+$", label):
+        candidate = re.sub(r"[^a-z0-9_]", "", label.strip().lower().replace(" ", "_"))
+    else:
+        pinyin_list = pypinyin.lazy_pinyin(label)
+        pinyin_str = "_".join(pinyin_list)
+        candidate = re.sub(r"[^a-z0-9_]", "", pinyin_str.lower())
+    # 移除開頭的數字與底線，確保以字母開頭
+    candidate = re.sub(r"^[0-9_]+", "", candidate)
+    if not candidate:
+        candidate = "custom_id"
+    return candidate
+
+def _semantic_choice_input(
+    label: str,
+    state_key: str,
+    presets: list[dict],
+    allow_multiple: bool = False,
+    max_items: int | None = None,
+    separate_none: bool = False,
+) -> None:
+    """語意型欄位通用輸入元件。
+    separate_none=True：將 id=='none' 的選項獨立放在最下面一行，
+    且點選時會同時清除其他已選項目的 edit_id session state。
+    """
+    st.subheader(label)
+
+    # 分離 none 選項
+    if separate_none:
+        main_presets = [p for p in presets if p["id"] != "none"]
+        none_presets  = [p for p in presets if p["id"] == "none"]
+    else:
+        main_presets = presets
+        none_presets  = []
+
+    # ── 主要預設按鈕（4欄） ──
+    cols = st.columns(4)
+    for i, preset in enumerate(main_presets):
+        with cols[i % 4]:
+            if st.button(preset["label"], key=f"btn_{state_key}_{preset['id']}"):
+                new_item = {"id": preset["id"], "label": preset["label"]}
+                if allow_multiple:
+                    if new_item not in st.session_state[state_key]:
+                        # 若目前選了 none，清掉再加入
+                        st.session_state[state_key] = [
+                            item for item in st.session_state[state_key] if item["id"] != "none"
+                        ]
+                        if max_items is None or len(st.session_state[state_key]) < max_items:
+                            st.session_state[state_key].append(new_item)
+                else:
+                    st.session_state[state_key] = new_item
+                    st.session_state[f"edit_id_{state_key}"] = new_item["id"]
+                st.rerun()
+
+    # ── 「沒有秘密」等 none 選項：獨立一行 ──
+    for preset in none_presets:
+        if st.button(f"⊘ {preset['label']}", key=f"btn_{state_key}_{preset['id']}", use_container_width=False):
+            if allow_multiple:
+                # 清空清單（不放入 none 項目）+ 遞增 reset_ver
+                # → 下方顯示區不渲染任何 text_input
+                # → 後續新增項目使用全新 widget key，值從 value= 取得而非舊 session state
+                reset_key = f"_rst_{state_key}"
+                st.session_state[reset_key] = st.session_state.get(reset_key, 0) + 1
+                st.session_state[state_key] = []
+            else:
+                st.session_state[state_key] = {"id": preset["id"], "label": preset["label"]}
+                st.session_state[f"edit_id_{state_key}"] = preset["id"]
+            st.rerun()
+
+    # ── 自訂輸入（半寬 + Y 軸對齊按鈕） ──
+    col_in, col_btn, _ = st.columns([2, 1, 3], vertical_alignment="bottom")
+    with col_in:
+        custom_label = st.text_input(f"自訂{label}", key=f"custom_{state_key}")
+    with col_btn:
+        add_clicked = st.button("選擇", key=f"add_{state_key}")
+
+    if add_clicked and custom_label:
+        found_preset = next((p for p in presets if p["label"] == custom_label), None)
+        sys_id = found_preset["id"] if found_preset else _generate_system_id(custom_label)
+        new_item = {"id": sys_id, "label": custom_label}
+        if allow_multiple:
+            if new_item not in st.session_state[state_key]:
+                st.session_state[state_key] = [
+                    item for item in st.session_state[state_key] if item["id"] != "none"
+                ]
+                if max_items is None or len(st.session_state[state_key]) < max_items:
+                    st.session_state[state_key].append(new_item)
+        else:
+            st.session_state[state_key] = new_item
+            st.session_state[f"edit_id_{state_key}"] = new_item["id"]
+        st.rerun()
+
+    # ── 目前選擇顯示 ──
+    st.write("目前選擇：")
+    if allow_multiple:
+        # reset_ver 改變時，text_input key 也改變，Streamlit 強制用 value= 重建 widget
+        reset_ver = st.session_state.get(f"_rst_{state_key}", 0)
+        for i, item in enumerate(list(st.session_state[state_key])):
+            cc1, cc2, cc3 = st.columns([1, 4, 1], vertical_alignment="center")
+            with cc1:
+                st.write(f"**{item['label']}**")
+            with cc2:
+                item["id"] = st.text_input(
+                    "系統 ID", value=item["id"],
+                    key=f"edit_id_{state_key}_{i}_v{reset_ver}", label_visibility="collapsed"
+                )
+            with cc3:
+                if st.button("✕", key=f"del_{state_key}_{i}_v{reset_ver}"):
+                    st.session_state[state_key].pop(i)
+                    st.rerun()
+    else:
+        current_item = st.session_state.get(state_key)
+        if current_item and isinstance(current_item, dict):
+            if f"edit_id_{state_key}" not in st.session_state:
+                st.session_state[f"edit_id_{state_key}"] = current_item["id"]
+            cc1, cc2 = st.columns([1, 4], vertical_alignment="center")
+            with cc1:
+                st.write(f"**{current_item['label']}**")
+            with cc2:
+                current_item["id"] = st.text_input(
+                    "系統 ID", key=f"edit_id_{state_key}", label_visibility="collapsed"
+                )
+
+
 def _go_to_page(label: str) -> None:
     """切換目前設定頁。"""
     st.session_state["active_page_label"] = label
@@ -101,15 +232,15 @@ def _build_package() -> SetupPackage:
         world_id=s["world_id"], title=s["title"],
         start_date=s["start_date"], end_date=s["end_date"],
         time_slots=["morning", "afternoon", "evening"],
-        global_style=list(s["global_style"]),
+        global_style=[SemanticChoice(**x) for x in s["global_style"]],
     )
     
     # 建立主角與初始數值模型
     protag = Protagonist(
         protagonist_id=s["protag_id"], name=s["protag_name"],
         gender=s["protag_gender"], age=s["protag_age"],
-        occupation=s["protag_occupation"], personality=s["protag_personality"],
-        secret=s["protag_secret"] or None,
+        occupation=SemanticChoice(**s["protag_occupation"]), personality=SemanticChoice(**s["protag_personality"]),
+        secrets=[SemanticChoice(**x) for x in s.get("protag_secrets", [])],
         initial_stats=InitialStats(
             INT=s["INT"], CHA=s["CHA"], STR=s["STR"],
             MORAL=s["MORAL"], Cash=s["Cash"], Debt=s["Debt"],
@@ -148,30 +279,7 @@ def _tab_world():
     st.session_state["start_date"] = st.date_input("開始日期", st.session_state["start_date"])
     st.session_state["end_date"] = st.date_input("結束日期", st.session_state["end_date"])
 
-    st.subheader("風格關鍵字")
-    # 顯示預設的風格選項按鈕
-    cols = st.columns(4)
-    for i, preset in enumerate(STYLE_PRESETS):
-        with cols[i % 4]:
-            if st.button(f"{preset['label']}", key=f"style_{preset['id']}"):
-                if preset["id"] not in st.session_state["global_style"]:
-                    st.session_state["global_style"].append(preset["id"])
-                    
-    # 允許手動輸入自訂風格
-    custom = st.text_input("自訂風格 (英文 ID)")
-    if custom and st.button("加入自訂風格"):
-        if custom not in st.session_state["global_style"]:
-            st.session_state["global_style"].append(custom)
-
-    # 顯示已選擇的風格，並提供清除按鈕
-    if st.session_state["global_style"]:
-        selected_style_labels = [
-            _preset_label(style_id, STYLE_PRESETS) for style_id in st.session_state["global_style"]
-        ]
-        st.write("已選風格：", "、".join(selected_style_labels))
-        if st.button("清除所有風格"):
-            st.session_state["global_style"] = []
-            st.rerun()
+    _semantic_choice_input("風格關鍵字", "global_style", STYLE_PRESETS, allow_multiple=True)
 
     _next_page_button(PAGE_LABELS[0])
 
@@ -192,24 +300,11 @@ def _tab_protagonist():
     )
     st.session_state["protag_gender"] = selected_gender
     st.session_state["protag_age"] = st.number_input("年齡", 1, 100, st.session_state["protag_age"])
-    st.subheader("職業")
-    _preset_button_grid("protag_occupation", PROTAGONIST_OCCUPATION_PRESETS, "occupation")
-    st.caption(f"目前選擇：{_preset_label(st.session_state['protag_occupation'], PROTAGONIST_OCCUPATION_PRESETS)}")
-    st.session_state["protag_occupation"] = st.text_input(
-        "自訂職業 ID（英文，小寫英文/數字/底線）", st.session_state["protag_occupation"]
-    )
+    _semantic_choice_input("職業", "protag_occupation", PROTAGONIST_OCCUPATION_PRESETS, allow_multiple=False)
 
-    st.subheader("性格描述")
-    _preset_button_grid("protag_personality", PROTAGONIST_PERSONALITY_PRESETS, "personality")
-    st.caption(f"目前選擇：{_preset_label(st.session_state['protag_personality'], PROTAGONIST_PERSONALITY_PRESETS)}")
-    st.session_state["protag_personality"] = st.text_input(
-        "自訂性格 ID（英文，小寫英文/數字/底線）", st.session_state["protag_personality"]
-    )
+    _semantic_choice_input("性格描述", "protag_personality", PROTAGONIST_PERSONALITY_PRESETS, allow_multiple=False)
 
-    st.subheader("主角的秘密")
-    _preset_button_grid("protag_secret", PROTAGONIST_SECRET_PRESETS, "secret")
-    st.caption(f"目前選擇：{_preset_label(st.session_state['protag_secret'], PROTAGONIST_SECRET_PRESETS)}")
-    st.session_state["protag_secret"] = st.text_area("主角的秘密（可選）", st.session_state["protag_secret"])
+    _semantic_choice_input("主角的秘密 (最多3個)", "protag_secrets", SECRET_PRESETS, allow_multiple=True, max_items=3, separate_none=True)
 
     st.subheader("初始數值")
     # 將數值輸入切分為三欄顯示
@@ -351,32 +446,33 @@ def _tab_characters():
                     st.rerun()
 
     st.subheader("新增角色")
+
+    # ── 語意型欄位必須在 form 外使用 st.button，故先在 form 前渲染 ──
+    if "temp_ch_tags" not in st.session_state:
+        st.session_state["temp_ch_tags"] = []
+    if "temp_ch_secrets" not in st.session_state:
+        st.session_state["temp_ch_secrets"] = []
+    _semantic_choice_input("性格標籤", "temp_ch_tags", CHARACTER_PERSONALITY_TAG_PRESETS, allow_multiple=True)
+    _semantic_choice_input("角色秘密 (最多3個)", "temp_ch_secrets", SECRET_PRESETS, allow_multiple=True, max_items=3, separate_none=True)
+
+    st.divider()
     with st.form("add_character", clear_on_submit=True):
         ch_id = st.text_input("角色 ID (英文)")
         ch_name = st.text_input("顯示名稱")
-        
+
         gender_ids = [g["id"] for g in GENDER_OPTIONS]
         ch_gender = st.selectbox("性別", gender_ids, format_func=lambda x: _preset_label(x, GENDER_OPTIONS))
-        
+
         orient_ids = [o["id"] for o in ORIENTATION_OPTIONS]
         ch_orient = st.multiselect("性取向", orient_ids, default=["heterosexual"], format_func=lambda x: _preset_label(x, ORIENTATION_OPTIONS))
-        
+
         role_ids = [r["id"] for r in ROLE_OPTIONS]
         ch_role = st.selectbox("定位", role_ids, format_func=lambda x: _preset_label(x, ROLE_OPTIONS))
-        
+
         ch_identity = st.text_input("身分描述")
-        
-        st.markdown("**性格標籤**")
-        sel_tags = st.multiselect(
-            "選擇預設性格標籤",
-            [f"{t['label']} ({t['id']})" for t in CHARACTER_PERSONALITY_TAG_PRESETS],
-            default=[]
-        )
-        ch_custom_tags = st.text_input("自訂性格標籤 ID（英文，小寫英文/數字/底線，逗號分隔）")
-        
         ch_favor = st.number_input("初始好感度", value=0)
 
-        # 呈現白名單多選區塊，供後續美術資源或事件引擎取用
+        # 白名單多選（st.multiselect 可在 form 內使用）
         st.markdown("**表情白名單**")
         sel_emo = st.multiselect("選擇表情", [f"{e['label']} ({e['id']})" for e in EMOTION_PRESETS],
                                   default=[f"{e['label']} ({e['id']})" for e in EMOTION_PRESETS[:3]])
@@ -388,25 +484,23 @@ def _tab_characters():
                                   default=[f"{p['label']} ({p['id']})" for p in POSITION_PRESETS])
 
         if st.form_submit_button("新增角色"):
-            # 將多選選到的格式解析回 {"id": ..., "label": ...} 的字典結構
             def _parse_presets(selected, presets):
                 return [{"id": p["id"], "label": p["label"]} for p in presets
                         if f"{p['label']} ({p['id']})" in selected]
-
-            # 合併預設選擇的 tag ID 與手動輸入的 tag ID
-            final_tags = [p["id"] for p in CHARACTER_PERSONALITY_TAG_PRESETS if f"{p['label']} ({p['id']})" in sel_tags]
-            final_tags.extend([t.strip() for t in ch_custom_tags.split(",") if t.strip()])
 
             new_ch = {
                 "character_id": ch_id, "display_name": ch_name,
                 "gender": ch_gender, "orientation": ch_orient,
                 "role": ch_role, "identity": ch_identity,
-                "personality_tags": final_tags,
+                "personality_tags": list(st.session_state["temp_ch_tags"]),
+                "secrets": list(st.session_state["temp_ch_secrets"]),
                 "initial_favor": ch_favor, "schedule": [],
                 "allowed_emotions": _parse_presets(sel_emo, EMOTION_PRESETS),
                 "allowed_costumes": _parse_presets(sel_cos, COSTUME_PRESETS),
                 "allowed_positions": _parse_presets(sel_pos, POSITION_PRESETS),
             }
+            st.session_state["temp_ch_tags"] = []
+            st.session_state["temp_ch_secrets"] = []
             st.session_state["characters"].append(new_ch)
             st.rerun()
 

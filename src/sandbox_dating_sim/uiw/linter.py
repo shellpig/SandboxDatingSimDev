@@ -30,6 +30,74 @@ class UIWLinter:
                 path="world.end_date",
                 message="end_date 必須晚於 start_date。"
             ))
+
+        # 1-G-3: global_style id 不可重複，且每個 id/label 必須合法
+        style_ids = [s.id for s in package.world.global_style]
+        if len(style_ids) != len(set(style_ids)):
+            issues.append(Issue(
+                severity="error",
+                type="duplicate_global_style_id",
+                path="world.global_style",
+                message="world.global_style 中有重複的 id。"
+            ))
+        for j, style in enumerate(package.world.global_style):
+            if not is_valid_id(style.id):
+                issues.append(Issue(severity="error", type="invalid_id_format",
+                    path=f"world.global_style[{j}].id",
+                    message=f"world.global_style[{j}] id 格式不合法：{style.id}。"))
+            if not style.label:
+                issues.append(Issue(severity="error", type="empty_semantic_label",
+                    path=f"world.global_style[{j}].label",
+                    message=f"world.global_style[{j}] label 不可為空。"))
+
+        # 1-G-3: protagonist.occupation id/label
+        occ = package.protagonist.occupation
+        if not is_valid_id(occ.id):
+            issues.append(Issue(severity="error", type="invalid_id_format",
+                path="protagonist.occupation.id",
+                message=f"protagonist.occupation id 格式不合法：{occ.id}。"))
+        if not occ.label:
+            issues.append(Issue(severity="error", type="empty_semantic_label",
+                path="protagonist.occupation.label",
+                message="protagonist.occupation label 不可為空。"))
+
+        # 1-G-3: protagonist.personality id/label
+        per = package.protagonist.personality
+        if not is_valid_id(per.id):
+            issues.append(Issue(severity="error", type="invalid_id_format",
+                path="protagonist.personality.id",
+                message=f"protagonist.personality id 格式不合法：{per.id}。"))
+        if not per.label:
+            issues.append(Issue(severity="error", type="empty_semantic_label",
+                path="protagonist.personality.label",
+                message="protagonist.personality label 不可為空。"))
+
+        # 1-G-3: protagonist.secrets 最多 3 個，且每項 id/label 合法
+        if len(package.protagonist.secrets) > 3:
+            issues.append(Issue(
+                severity="error",
+                type="secrets_exceeds_max",
+                path="protagonist.secrets",
+                message="protagonist.secrets 超過最多 3 個限制。"
+            ))
+        protag_secret_ids = [s.id for s in package.protagonist.secrets]
+        if "none" in protag_secret_ids and len(protag_secret_ids) > 1:
+            issues.append(Issue(
+                severity="error",
+                type="none_secret_conflict",
+                path="protagonist.secrets",
+                message="protagonist.secrets 中 none 不可與其他秘密並存。"
+            ))
+        for j, sec in enumerate(package.protagonist.secrets):
+            if not is_valid_id(sec.id):
+                issues.append(Issue(severity="error", type="invalid_id_format",
+                    path=f"protagonist.secrets[{j}].id",
+                    message=f"protagonist.secrets[{j}] id 格式不合法：{sec.id}。"))
+            if not sec.label:
+                issues.append(Issue(severity="error", type="empty_semantic_label",
+                    path=f"protagonist.secrets[{j}].label",
+                    message=f"protagonist.secrets[{j}] label 不可為空。"))
+
         return issues
 
     def _check_ids(self, package: SetupPackage) -> list[Issue]:
@@ -144,7 +212,62 @@ class UIWLinter:
                     path=f"characters[{i}].allowed_positions",
                     message=f"角色 {char.character_id} 缺乏 allowed_positions 設定。"
                 ))
+
+            # 1-G-3: personality_tags id 不可重複
+            tag_ids = [t.id for t in char.personality_tags]
+            if len(tag_ids) != len(set(tag_ids)):
+                issues.append(Issue(
+                    severity="error",
+                    type="duplicate_personality_tag_id",
+                    path=f"characters[{i}].personality_tags",
+                    message=f"角色 {char.character_id} 的 personality_tags id 有重複。"
+                ))
+            # 1-G-3: SemanticChoice label 不可為空
+            for j, tag in enumerate(char.personality_tags):
+                if not tag.label:
+                    issues.append(Issue(
+                        severity="error",
+                        type="empty_semantic_label",
+                        path=f"characters[{i}].personality_tags[{j}].label",
+                        message=f"角色 {char.character_id} 的 personality_tag[{j}] label 不可為空。"
+                    ))
+                if not is_valid_id(tag.id):
+                    issues.append(Issue(
+                        severity="error",
+                        type="invalid_id_format",
+                        path=f"characters[{i}].personality_tags[{j}].id",
+                        message=f"角色 {char.character_id} 的 personality_tag[{j}] id 格式不合法：{tag.id}。"
+                    ))
+
+            # 1-G-3: secrets 最多 3 個，且每項 id/label 合法
+            if len(char.secrets) > 3:
+                issues.append(Issue(
+                    severity="error",
+                    type="secrets_exceeds_max",
+                    path=f"characters[{i}].secrets",
+                    message=f"角色 {char.character_id} 的 secrets 超過最多 3 個限制。"
+                ))
+            # 1-G-3: none 不可與其他秘密並存
+            secret_ids = [s.id for s in char.secrets]
+            if "none" in secret_ids and len(secret_ids) > 1:
+                issues.append(Issue(
+                    severity="error",
+                    type="none_secret_conflict",
+                    path=f"characters[{i}].secrets",
+                    message=f"角色 {char.character_id} 的 secrets 中 none 不可與其他秘密並存。"
+                ))
+            for j, sec in enumerate(char.secrets):
+                if not is_valid_id(sec.id):
+                    issues.append(Issue(severity="error", type="invalid_id_format",
+                        path=f"characters[{i}].secrets[{j}].id",
+                        message=f"角色 {char.character_id} 的 secrets[{j}] id 格式不合法：{sec.id}。"))
+                if not sec.label:
+                    issues.append(Issue(severity="error", type="empty_semantic_label",
+                        path=f"characters[{i}].secrets[{j}].label",
+                        message=f"角色 {char.character_id} 的 secrets[{j}] label 不可為空。"))
+
         return issues
+
 
     def _check_schedules(self, package: SetupPackage) -> list[Issue]:
         issues = []

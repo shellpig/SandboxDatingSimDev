@@ -59,3 +59,21 @@ def test_exporter_preserves_chinese_labels():
     exporter = SetupPackageExporter()
     md = exporter.to_markdown(pkg)
     assert "label: 平常" in md
+
+
+# ─── 1-G-3 Tests ────────────────────────────────────────────────────────────
+
+def test_exporter_outputs_semantic_choice_id_and_label():
+    """SemanticChoice 語意型欄位輸出包含 id 與中文 label。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    exporter = SetupPackageExporter()
+    md = exporter.to_markdown(pkg)
+    # protagonist.occupation 應輸出 id + label
+    assert "id: student" in md
+    assert "label: 學生" in md
+    # world.global_style 應輸出 id + label
+    assert "id: urban_romance" in md
+    assert "label: 都市戀愛" in md
+    # character personality_tags 應輸出 id + label
+    assert "id: guarded" in md
+    assert "label: 戒心重" in md

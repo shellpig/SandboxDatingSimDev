@@ -53,6 +53,14 @@ PROTAGONIST_OCCUPATION_PRESETS = [
     {"id": "debt_collector_assistant", "label": "催收助理"},
     {"id": "cafe_staff", "label": "咖啡廳店員"},
     {"id": "delivery_rider", "label": "外送員"},
+    {"id": "rich_heir", "label": "富二代"},
+    {"id": "startup_founder", "label": "新創公司老闆"},
+    {"id": "tech_worker", "label": "科技業"},
+    {"id": "finance_professional", "label": "金融業"},
+    {"id": "doctor", "label": "醫師"},
+    {"id": "lawyer", "label": "律師"},
+    {"id": "university_lecturer", "label": "大學講師"},
+    {"id": "graphic_designer", "label": "平面設計師"},
 ]
 
 PROTAGONIST_PERSONALITY_PRESETS = [
@@ -66,7 +74,7 @@ PROTAGONIST_PERSONALITY_PRESETS = [
     {"id": "people_pleaser", "label": "討好型人格"},
 ]
 
-PROTAGONIST_SECRET_PRESETS = [
+SECRET_PRESETS = [
     {"id": "family_debt", "label": "背負家族債務"},
     {"id": "fake_identity", "label": "隱瞞真實身分"},
     {"id": "past_betrayal", "label": "曾背叛重要的人"},
@@ -75,6 +83,14 @@ PROTAGONIST_SECRET_PRESETS = [
     {"id": "runaway_from_home", "label": "離家出走"},
     {"id": "old_promise", "label": "守著一個舊約定"},
     {"id": "none", "label": "沒有秘密"},
+    {"id": "hidden_wealth", "label": "其實家境富裕"},
+    {"id": "criminal_record", "label": "曾有犯罪紀錄"},
+    {"id": "secret_childhood_friend", "label": "隱瞞童年舊識"},
+    {"id": "family_scandal", "label": "家族醜聞"},
+    {"id": "forbidden_relationship", "label": "曾有禁忌戀情"},
+    {"id": "fake_education", "label": "學歷造假"},
+    {"id": "underground_job", "label": "從事地下工作"},
+    {"id": "terminal_illness_in_family", "label": "家人身患重病"},
 ]
 
 DEBT_TIER_PRESETS = [

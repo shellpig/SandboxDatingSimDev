@@ -8,15 +8,19 @@ world:
     - afternoon
     - evening
   global_style:
-    - urban_romance
-    - black_humor
+    - id: urban_romance
+      label: 都市戀愛
+    - id: black_humor
+      label: 黑色幽默
 
 protagonist:
   protagonist_id: protagonist
   name: 佑介
   gender: male
   age: 20
-  occupation: student
+  occupation:
+    id: student
+    label: 學生
   initial_stats:
     INT: 5
     CHA: 6
@@ -24,7 +28,10 @@ protagonist:
     MORAL: 5
     Cash: 3000
     Debt: 50000
-  personality: friendly
+  personality:
+    id: friendly
+    label: 友善
+  secrets: []
 
 locations:
   - location_id: school
@@ -76,8 +83,11 @@ characters:
     role: main_love_interest
     identity: 主角的同班同學
     personality_tags:
-      - guarded
-      - secretly_kind
+      - id: guarded
+        label: 戒心重
+      - id: secretly_kind
+        label: 其實很溫柔
+    secrets: []
     initial_favor: 0
     schedule:
       - schedule_id: sophie_weekday_morning

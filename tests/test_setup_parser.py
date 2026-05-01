@@ -82,3 +82,35 @@ def test_roundtrip_preserves_asset_vocabularies_and_aliases():
     
     assert pkg_out.asset_vocabularies == pkg_in.asset_vocabularies
     assert pkg_out.alias_tables == pkg_in.alias_tables
+
+
+# ─── 1-G-3 Tests ────────────────────────────────────────────────────────────
+
+def test_roundtrip_preserves_semantic_choice_labels():
+    """SemanticChoice 語意型欄位 roundtrip 後中文 label 不遺失。"""
+    pkg_in = load_yaml("setup_minimal.yaml")
+    exporter = SetupPackageExporter()
+    md = exporter.to_markdown(pkg_in)
+
+    parser = SetupPackageParser()
+    pkg_out = parser.parse_markdown(md)
+
+    # occupation 保留 label
+    assert pkg_out.protagonist.occupation.id == pkg_in.protagonist.occupation.id
+    assert pkg_out.protagonist.occupation.label == pkg_in.protagonist.occupation.label
+
+    # personality 保留 label
+    assert pkg_out.protagonist.personality.label == pkg_in.protagonist.personality.label
+
+    # global_style 保留 label
+    for s_in, s_out in zip(pkg_in.world.global_style, pkg_out.world.global_style):
+        assert s_out.id == s_in.id
+        assert s_out.label == s_in.label
+
+    # character personality_tags 保留 label
+    for t_in, t_out in zip(
+        pkg_in.characters[0].personality_tags,
+        pkg_out.characters[0].personality_tags
+    ):
+        assert t_out.id == t_in.id
+        assert t_out.label == t_in.label

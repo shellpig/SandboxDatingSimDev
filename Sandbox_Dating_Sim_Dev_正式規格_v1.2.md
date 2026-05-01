@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.3 | 2026-05-01 | 明確定義 `secrets: []` 為「沒有秘密」的 canonical 表示；`none` 僅作為 UI 操作選項，不寫入 Setup Package，避免 AI 誤讀成秘密語意。 |
 | v1.2.2 | 2026-05-01 | 補充 Phase 1-G-3：使用者語意型選項需保存 `id + label`，讓系統保有英文 canonical ID，同時讓 AI 取得中文語意。 |
 | v1.2.1 | 2026-04-27 | 更新內容生成文件管線引用至 `Sandbox_Dating_Sim_文件管線規格_v1.1.md`，以統一 `uiw_version: 1.2`。 |
 | v1.2 | 2026-04-27 | 新增 Map Manager、Controlled Asset Vocabulary、Auto Repair Layer、Critical Path Mode 與內容生成文件管線。 |
@@ -234,6 +235,14 @@ secrets:
     label: 背負家族債務
 ```
 
+若主角沒有秘密，canonical data 必須寫為空陣列：
+
+```yaml
+secrets: []
+```
+
+`none = 沒有秘密` 只屬於 UI 操作選項，用來清空已選秘密，不得寫入 Setup Package。AI 讀取 `secrets: []` 時應理解為「此角色沒有使用者指定的秘密」，不得把 `none` 當成一個可生成伏筆的秘密語意。
+
 ### 4.4 Character
 
 角色分為可攻略角色與關鍵配角。
@@ -295,6 +304,8 @@ allowed_positions:
 ```
 
 Phase 1-G-3 起，`characters[].personality_tags` 與 `characters[].secrets` 屬於使用者語意型欄位，需保存 `id + label`。角色秘密可作為 AI 生成角色行為、伏筆與事件前置條件的語意資料；若需作為邏輯判斷，仍應另以 `secret_flags` 或一般 `flags` 建立穩定條件。
+
+若角色沒有秘密，`characters[].secrets` 同樣必須寫為空陣列 `[]`。UI 中的「沒有秘密」按鈕只代表清空秘密清單；Setup Package 不保存 `{id: none, label: 沒有秘密}`。
 
 ## 5. Map Manager 與 Free Roam Resolution
 

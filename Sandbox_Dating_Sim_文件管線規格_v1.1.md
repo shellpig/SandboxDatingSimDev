@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.3 | 2026-05-01 | 明確規定 Setup Package 中沒有秘密時使用 `secrets: []`；`none = 沒有秘密` 只屬 UI 操作，不輸出給 AI 作為秘密語意。 |
 | v1.2 | 2026-05-01 | 對齊 UIW Phase 1-G-3：Setup Package 語意型欄位改為保存 `id + label`，讓 AI 能讀取中文語意，系統仍使用英文 canonical ID。 |
 | v1.1 | 2026-04-27 | 將 Setup Package 範例中的 `uiw_version` 統一為 `1.2`，對齊 UIW 初始設定 v1.2。 |
 | v1.0 | 2026-04-27 | 初版，定義 Setup Package MD、Event Blueprint MD、Scene Draft MD 與分階段生成流程。 |
@@ -144,6 +145,8 @@ Setup Package MD 必須包含：
 - `alias_tables`
 
 使用者語意型欄位必須保存 `id + label`，例如 `world.global_style`、`protagonist.occupation`、`protagonist.personality`、`protagonist.secrets`、`characters[].personality_tags`、`characters[].secrets`。AI 讀取 Setup Package 時應使用中文 `label` 理解語意，工具與驗證器則使用英文 `id` 做穩定引用。
+
+若 `protagonist.secrets` 或 `characters[].secrets` 為空，必須輸出為 `secrets: []`。這代表使用者沒有指定秘密；AI 不得把 `none` 視為一個秘密、伏筆或角色特質。UI 的 `none = 沒有秘密` 僅用來清空清單，不應出現在 Setup Package MD。
 
 ### 3.3 輸出與保存
 
