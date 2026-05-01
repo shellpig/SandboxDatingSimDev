@@ -3,6 +3,7 @@
 .pytest_tmp/
 .ruff_cache/
 .claude/
+.idea/
 __pycache__/
 *.py[cod]
 *$py.class
