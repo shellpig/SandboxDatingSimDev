@@ -175,16 +175,16 @@ LOCATION_TEMPLATES = [
         "location_type": "container",
         "is_visitable": False,
         "tags": ["commercial", "indoor", "shopping"],
-        "suggested_sub_locations": ["food_court", "boutique_floor", "roof_garden"],
+        "suggested_sub_locations": ["food_court", "luxury_floor", "sky_garden"],
     },
     {
-        "template_id": "beach_container",
+        "template_id": "seaside_container",
         "label": "海邊",
-        "location_id_suggestion": "beach",
+        "location_id_suggestion": "seaside",
         "location_type": "container",
         "is_visitable": False,
         "tags": ["outdoor", "nature", "summer"],
-        "suggested_sub_locations": ["sandy_beach", "beach_house", "observation_deck"],
+        "suggested_sub_locations": ["beach", "beach_house", "observation_deck"],
     },
     {
         "template_id": "hot_spring_inn_container",
@@ -279,9 +279,9 @@ LOCATION_TEMPLATES = [
         "suggested_sub_locations": [],
     },
     {
-        "template_id": "library_standalone",
+        "template_id": "public_library",
         "label": "圖書館",
-        "location_id_suggestion": "library",
+        "location_id_suggestion": "public_library",
         "location_type": "standalone",
         "is_visitable": True,
         "tags": ["quiet", "study", "indoor"],
@@ -346,19 +346,19 @@ SUB_LOCATION_TEMPLATES = [
     {"template_id": "underground_mall", "label": "地下街", "location_id_suffix": "underground_mall", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["commercial", "indoor"]},
     # Amusement Park
     {"template_id": "ferris_wheel", "label": "摩天輪", "location_id_suffix": "ferris_wheel", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["date_spot", "romantic"]},
-    {"template_id": "roller_coaster", "label": "雲霄飛車", "location_id_suffix": "roller_coaster", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon"], "tags": ["thrilling", "loud"]},
-    {"template_id": "haunted_house", "label": "鬼屋", "location_id_suffix": "haunted_house", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["scary", "dark"]},
-    {"template_id": "souvenir_shop", "label": "紀念品店", "location_id_suffix": "souvenir_shop", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["commercial", "souvenir"]},
+    {"template_id": "roller_coaster", "label": "雲霄飛車", "location_id_suffix": "roller_coaster", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["thrilling", "loud"]},
+    {"template_id": "haunted_house", "label": "鬼屋", "location_id_suffix": "haunted_house", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["scary", "dark"]},
+    {"template_id": "souvenir_shop", "label": "紀念品店", "location_id_suffix": "souvenir_shop", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["commercial", "souvenir"]},
     # Department Store
     {"template_id": "food_court", "label": "美食街", "location_id_suffix": "food_court", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["food", "crowded"]},
-    {"template_id": "boutique_floor", "label": "精品樓層", "location_id_suffix": "boutique_floor", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["shopping", "expensive"]},
-    {"template_id": "roof_garden", "label": "空中花園", "location_id_suffix": "roof_garden", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["relaxing", "scenic"]},
-    # Beach
-    {"template_id": "sandy_beach", "label": "沙灘", "location_id_suffix": "sandy_beach", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["outdoor", "play"]},
-    {"template_id": "beach_house", "label": "海之家", "location_id_suffix": "beach_house", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon"], "tags": ["food", "rest"]},
-    {"template_id": "observation_deck", "label": "觀景台", "location_id_suffix": "observation_deck", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["scenic", "date_spot"]},
+    {"template_id": "luxury_floor", "label": "精品樓層", "location_id_suffix": "luxury_floor", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["shopping", "expensive"]},
+    {"template_id": "sky_garden", "label": "空中花園", "location_id_suffix": "sky_garden", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["relaxing", "scenic"]},
+    # Seaside
+    {"template_id": "beach", "label": "沙灘", "location_id_suffix": "beach", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["outdoor", "play"]},
+    {"template_id": "beach_house", "label": "海之家", "location_id_suffix": "beach_house", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["food", "rest"]},
+    {"template_id": "observation_deck", "label": "觀景台", "location_id_suffix": "observation_deck", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["scenic", "date_spot"]},
     # Hot Spring Inn
     {"template_id": "lobby", "label": "大廳", "location_id_suffix": "lobby", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["indoor", "public"]},
-    {"template_id": "guest_room", "label": "客房", "location_id_suffix": "guest_room", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["private", "rest"]},
-    {"template_id": "open_air_bath", "label": "露天溫泉", "location_id_suffix": "open_air_bath", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["morning", "afternoon", "evening"], "tags": ["relaxing", "bath"]},
+    {"template_id": "guest_room", "label": "客房", "location_id_suffix": "guest_room", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["afternoon", "evening"], "tags": ["private", "rest"]},
+    {"template_id": "open_air_bath", "label": "露天溫泉", "location_id_suffix": "open_air_bath", "location_type": "sub_location", "is_visitable": True, "available_time_slots": ["evening"], "tags": ["relaxing", "bath"]},
 ]

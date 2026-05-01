@@ -162,9 +162,9 @@ def test_1_g_4_required_templates_exist():
         "school_container", "shopping_street_container", "station_area_container",
         "home_standalone", "cinema_standalone", "convenience_store_standalone",
         "company_standalone", "park_standalone", "amusement_park_container",
-        "department_store_container", "hospital_standalone", "beach_container",
+        "department_store_container", "hospital_standalone", "seaside_container",
         "hot_spring_inn_container", "night_market_standalone", "gym_standalone",
-        "library_standalone", "police_station_standalone", "art_museum_standalone",
+        "public_library", "police_station_standalone", "art_museum_standalone",
         "riverside_walk_standalone", "bar_standalone"
     ]
     for req in required:
