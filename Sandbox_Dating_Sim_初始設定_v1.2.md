@@ -4,6 +4,8 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.9 | 2026-05-01 | 修正 Phase 1-G-4 地點模板規格：明確子地點 ID 由父地點 ID 與 suffix 組成、保留既有 standalone 模板，並區分同名便利商店模板顯示。 |
+| v1.2.8 | 2026-05-01 | 補充 Phase 1-G-4 地點與地圖調整：地點頁順序提前、擴充模板、刪除引用防呆、中文化地點類型與可使用時段，並將 tags 定義為 AI 劇情參考用進階設定。 |
 | v1.2.7 | 2026-05-01 | 補充 Phase 1-G-3 完成後規則：`none = 沒有秘密` 僅為 UI 清空操作，canonical data 以 `secrets: []` 表示沒有秘密；記錄 1-G-3 實作完成項目。 |
 | v1.2.6 | 2026-05-01 | 補充 Phase 1-G-3：語意型欄位改為保存 `id + label`；主角與 NPC 秘密改為最多 3 個複選；新增職業與秘密預設選項；改善中文自訂輸入與系統 ID 欄位。 |
 | v1.2.5 | 2026-04-28 | 補充 Phase 1-G-2 使用者操作回饋：主角 ID 固定隱藏、性別/性取向/定位 UI 選項中文化、主角預設年齡 29、角色性格標籤預設選項，以及自訂 canonical ID 欄位英文輸入說明。 |
@@ -792,6 +794,18 @@ Phase 1-G-3 已完成下列項目：
 
 UI 應提供地點模板，讓使用者點選後自動帶入常用欄位。模板只負責建立草稿，使用者仍可修改名稱、ID、標籤、時間段與條件。
 
+Phase 1-G-4 起，地點頁應在角色頁之前完成，因為角色 schedule 會引用可進入地點。
+
+模板規則：
+
+- 原本既有模板必須保留。
+- 文件已有但實作尚未提供的模板應補齊。
+- 每個 `sub_location` 與 `standalone` 模板必須提供合理 `available_time_slots`；所有模板必須提供 `tags`。
+- `tags` 可為中文或英文描述，作為 AI 生成劇情時的地點氣氛、用途、社交屬性、危險程度、約會適合度等參考，不是 canonical ID。
+- 套用模板時若即將建立的主地點、獨立地點或任一子地點 ID 已存在，應阻止套用並提示使用者，不自動建立重複地點。
+- 子地點實際 `location_id` 必須由 `<parent_location_id>_<location_id_suffix>` 組成。例如商店街中的便利商店應產生 `shopping_street_convenience_store`，避免與獨立地點 `convenience_store` 衝突。
+- 若子地點與獨立地點名稱相同，UI 顯示時應提供脈絡或副標，例如 `便利商店(商店街內)` 與 `便利商店(獨立)`。
+
 #### 主地點 / 區域模板
 
 ```yaml
@@ -804,6 +818,7 @@ container_templates:
     tags:
       - school
       - public
+      - 校園日常
     suggested_sub_locations:
       - classroom
       - library
@@ -818,9 +833,10 @@ container_templates:
     tags:
       - commercial
       - public
+      - 約會與偶遇
     suggested_sub_locations:
       - cafe
-      - convenience_store
+      - convenience_store_sub
       - arcade
 
   - template_id: station_area_container
@@ -831,10 +847,69 @@ container_templates:
     tags:
       - transit
       - public
+      - 通勤
+      - 偶遇
     suggested_sub_locations:
+      - platform
       - station_square
-      - ticket_gate
-      - bus_stop
+      - underground_mall
+
+  - template_id: amusement_park_container
+    label: 遊樂園
+    location_id_suggestion: amusement_park
+    location_type: container
+    is_visitable: false
+    tags:
+      - entertainment
+      - date_spot
+      - 熱鬧
+    suggested_sub_locations:
+      - ferris_wheel
+      - roller_coaster
+      - haunted_house
+      - souvenir_shop
+
+  - template_id: department_store_container
+    label: 百貨公司
+    location_id_suggestion: department_store
+    location_type: container
+    is_visitable: false
+    tags:
+      - commercial
+      - date_spot
+      - 室內
+    suggested_sub_locations:
+      - food_court
+      - luxury_floor
+      - sky_garden
+
+  - template_id: seaside_container
+    label: 海邊
+    location_id_suggestion: seaside
+    location_type: container
+    is_visitable: false
+    tags:
+      - outdoor
+      - romantic
+      - 開放感
+    suggested_sub_locations:
+      - beach
+      - beach_house
+      - observation_deck
+
+  - template_id: hot_spring_inn_container
+    label: 溫泉旅館
+    location_id_suggestion: hot_spring_inn
+    location_type: container
+    is_visitable: false
+    tags:
+      - travel
+      - private
+      - 放鬆
+    suggested_sub_locations:
+      - lobby
+      - guest_room
+      - open_air_bath
 ```
 
 #### 子地點模板
@@ -876,6 +951,252 @@ sub_location_templates:
     tags:
       - date_spot
       - commercial
+
+  - template_id: rooftop
+    label: 屋頂
+    location_id_suffix: rooftop
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - outdoor
+      - private
+
+  - template_id: sports_ground
+    label: 操場
+    location_id_suffix: sports_ground
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+    tags:
+      - outdoor
+      - school
+
+  - template_id: convenience_store_sub
+    label: 便利商店
+    location_id_suffix: convenience_store
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - commercial
+      - casual
+
+  - template_id: arcade
+    label: 遊戲中心
+    location_id_suffix: arcade
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - entertainment
+      - noisy
+
+  - template_id: platform
+    label: 月台
+    location_id_suffix: platform
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - transit
+      - 偶遇
+
+  - template_id: station_square
+    label: 站前廣場
+    location_id_suffix: station_square
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - public
+      - meeting_spot
+
+  - template_id: underground_mall
+    label: 地下街
+    location_id_suffix: underground_mall
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - commercial
+      - indoor
+
+  - template_id: ferris_wheel
+    label: 摩天輪
+    location_id_suffix: ferris_wheel
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - romantic
+      - date_spot
+
+  - template_id: roller_coaster
+    label: 雲霄飛車
+    location_id_suffix: roller_coaster
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - thrill
+      - entertainment
+
+  - template_id: haunted_house
+    label: 鬼屋
+    location_id_suffix: haunted_house
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - thrill
+      - close_contact
+
+  - template_id: souvenir_shop
+    label: 紀念品店
+    location_id_suffix: souvenir_shop
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - shopping
+      - gift
+
+  - template_id: food_court
+    label: 美食街
+    location_id_suffix: food_court
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - food
+      - casual
+
+  - template_id: luxury_floor
+    label: 精品樓層
+    location_id_suffix: luxury_floor
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - luxury
+      - social_status
+
+  - template_id: sky_garden
+    label: 空中花園
+    location_id_suffix: sky_garden
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - romantic
+      - quiet
+
+  - template_id: beach
+    label: 沙灘
+    location_id_suffix: beach
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - outdoor
+      - romantic
+
+  - template_id: beach_house
+    label: 海之家
+    location_id_suffix: beach_house
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - food
+      - summer
+
+  - template_id: observation_deck
+    label: 觀景台
+    location_id_suffix: observation_deck
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - scenic
+      - confession_spot
+
+  - template_id: lobby
+    label: 大廳
+    location_id_suffix: lobby
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - public
+      - travel
+
+  - template_id: guest_room
+    label: 客房
+    location_id_suffix: guest_room
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - afternoon
+      - evening
+    tags:
+      - private
+      - intimate
+
+  - template_id: open_air_bath
+    label: 露天溫泉
+    location_id_suffix: open_air_bath
+    location_type: sub_location
+    is_visitable: true
+    available_time_slots:
+      - evening
+    tags:
+      - relaxing
+      - intimate
 ```
 
 #### 獨立地點模板
@@ -910,7 +1231,7 @@ standalone_templates:
     base_cost: 300
 
   - template_id: convenience_store
-    label: 便利商店
+    label: 便利商店(獨立)
     location_id_suggestion: convenience_store
     location_type: standalone
     is_visitable: true
@@ -921,6 +1242,136 @@ standalone_templates:
     tags:
       - commercial
       - part_time_job
+
+  - template_id: protagonist_company
+    label: 主角公司
+    location_id_suggestion: protagonist_company
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+    tags:
+      - workplace
+      - 壓力
+      - 同事互動
+
+  - template_id: park
+    label: 公園
+    location_id_suggestion: park
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - outdoor
+      - peaceful
+      - 散步
+
+  - template_id: hospital
+    label: 醫院
+    location_id_suggestion: hospital
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - serious
+      - health
+      - 壓力
+
+  - template_id: night_market
+    label: 夜市
+    location_id_suggestion: night_market
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - evening
+    tags:
+      - food
+      - crowded
+      - 熱鬧
+
+  - template_id: gym
+    label: 健身房
+    location_id_suggestion: gym
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - exercise
+      - self_improvement
+
+  - template_id: public_library
+    label: 圖書館
+    location_id_suggestion: public_library
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+    tags:
+      - quiet
+      - study
+
+  - template_id: police_station
+    label: 警察局
+    location_id_suggestion: police_station
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - authority
+      - tension
+
+  - template_id: art_museum
+    label: 美術館
+    location_id_suggestion: art_museum
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+    tags:
+      - art
+      - quiet
+      - date_spot
+
+  - template_id: riverside_walk
+    label: 河岸步道
+    location_id_suggestion: riverside_walk
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - outdoor
+      - romantic
+      - 散步
+
+  - template_id: bar
+    label: 酒吧
+    location_id_suggestion: bar
+    location_type: standalone
+    is_visitable: true
+    available_time_slots:
+      - evening
+    tags:
+      - nightlife
+      - secret_talk
+      - 曖昧
 ```
 
 ### 3.1.2 地點建立 UI 編排
@@ -958,6 +1409,12 @@ UI 行為：
 - 子地點必須隸屬於某個主地點。
 - 獨立地點不可有 `parent_location_id`。
 - 玩家實際可移動目標只應是 `sub_location` 或 `standalone`。
+- Phase 1-G-4 起，地點清單每個項目後方應直接顯示刪除按鈕，不需展開 JSON 才能刪除。
+- 刪除 container 時，若仍有子地點引用該 `location_id`，應阻止刪除並提示引用的子地點。
+- 刪除任何地點時，若角色 schedule 引用該 `location_id`，應阻止刪除並提示引用來源。
+- `location_type` 選項在 UI 中應顯示 `主地點/區域(container)`、`子地點(sub_location)`、`獨立地點(standalone)`，資料仍保存英文 ID。
+- `available_time_slots` 選項在 UI 中應顯示 `早上(morning)`、`下午(afternoon)`、`晚上(evening)`，資料仍保存英文 ID。
+- 「標籤」欄位應放在「進階設定」中，允許中文或英文描述，並說明其用途是提供 AI 劇情生成參考。
 
 Phase 1-F 的 Interactive UIW Prototype 可先採用樸素表單與表格實作，不必完成正式地圖樹。最小可行 UI 可以是：
 
@@ -1028,7 +1485,7 @@ locations:
 - `is_visitable`: 玩家是否能直接進入。
 - `base_cost`: 入場費或基本消費。
 - `available_time_slots`: 可進入時間段。
-- `tags`: 地點標籤，用於生成與事件篩選。
+- `tags`: 地點標籤，用於生成與事件篩選。Phase 1-G-4 起，此欄位是 AI 劇情參考用進階設定，可輸入中文或英文描述，例如地點氣氛、用途、社交屬性、危險程度、約會適合度；不視為 canonical ID。
 - `unlock_conditions`: 解鎖條件。
 - `closed_conditions`: 關閉條件。
 - `map_priority`: 地圖顯示與事件排序用優先權。

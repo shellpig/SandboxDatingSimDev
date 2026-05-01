@@ -27,8 +27,8 @@ from sandbox_dating_sim.uiw.defaults import (
 PAGE_LABELS = [
     "世界觀與曆法(World)",
     "主角設定(Protagonist)",
-    "角色設定(Characters)",
     "地點與地圖(Locations)",
+    "角色設定(Characters)",
     "旗標/狀態/結局(Flags/Status/Endings)",
     "預覽與匯出(Review & Export)",
 ]
@@ -345,14 +345,63 @@ def _tab_locations():
     # --- 地點清單 ---
     if st.session_state["locations"]:
         st.subheader("目前地點")
+        
+        loc_name_map = {loc["location_id"]: loc["name"] for loc in st.session_state["locations"]}
+        printed_indices = set()
+        display_order = []
+        
         for i, loc in enumerate(st.session_state["locations"]):
-            parent = f" (父: {loc['parent_location_id']})" if loc.get("parent_location_id") else ""
-            label = f"{loc['name']} [{loc['location_type']}]{parent}"
-            with st.expander(label):
-                st.json(loc)
-                if st.button(f"刪除 {loc['location_id']}", key=f"del_loc_{i}"):
-                    st.session_state["locations"].pop(i)
-                    st.rerun()  # 重新執行以更新畫面
+            if i in printed_indices:
+                continue
+            if not loc.get("parent_location_id"):
+                display_order.append((i, loc, False))
+                printed_indices.add(i)
+                for j, sub_loc in enumerate(st.session_state["locations"]):
+                    if sub_loc.get("parent_location_id") == loc["location_id"] and j not in printed_indices:
+                        display_order.append((j, sub_loc, True))
+                        printed_indices.add(j)
+                        
+        for i, loc in enumerate(st.session_state["locations"]):
+            if i not in printed_indices:
+                display_order.append((i, loc, bool(loc.get("parent_location_id"))))
+                
+        for i, loc, is_indented in display_order:
+            parent_id = loc.get("parent_location_id")
+            if parent_id:
+                parent_name = loc_name_map.get(parent_id, parent_id)
+                parent_str = f" (父: {parent_name})"
+            else:
+                parent_str = ""
+                
+            label = f"{loc['name']} [{loc['location_type']}]{parent_str}"
+            
+            c1, c2 = st.columns([5, 1], vertical_alignment="center")
+            with c1:
+                if is_indented:
+                    col_space, col_exp = st.columns([1, 15])
+                    with col_exp:
+                        with st.expander(label):
+                            st.json(loc)
+                else:
+                    with st.expander(label):
+                        st.json(loc)
+            with c2:
+                if st.button("刪除", key=f"del_loc_{i}"):
+                    loc_id = loc["location_id"]
+                    has_subs = [l["location_id"] for l in st.session_state["locations"] if l.get("parent_location_id") == loc_id]
+                    if has_subs:
+                        st.toast(f"無法刪除：仍有子地點引用此地點 ({', '.join(has_subs)})", icon="🚨")
+                    else:
+                        ref_by = []
+                        for ch in st.session_state["characters"]:
+                            for sch in ch.get("schedule", []):
+                                if sch["location_id"] == loc_id:
+                                    ref_by.append(f"角色 {ch['character_id']} (行程 {sch['schedule_id']})")
+                        if ref_by:
+                            st.toast(f"無法刪除：被行程引用 ({', '.join(ref_by)})", icon="🚨")
+                        else:
+                            st.session_state["locations"].pop(i)
+                            st.rerun()
 
     # --- 套用模板 ---
     st.subheader("套用地點模板")
@@ -363,43 +412,57 @@ def _tab_locations():
         tpl = LOCATION_TEMPLATES[tpl_idx]
         loc_id = tpl.get("location_id_suggestion", tpl["template_id"])
         
-        # 建立主要父地點（或獨立地點）
-        new_loc = {
-            "location_id": loc_id, "name": tpl["label"],
-            "location_type": tpl["location_type"],
-            "parent_location_id": None,
-            "is_visitable": tpl.get("is_visitable", False),
-            "base_cost": tpl.get("base_cost", 0),
-            "available_time_slots": tpl.get("available_time_slots", ["morning", "afternoon"]),
-            "tags": tpl.get("tags", []),
-            "empty_behavior": tpl.get("empty_behavior", "show_empty"),
-        }
-        st.session_state["locations"].append(new_loc)
-        
-        # 根據模板中的建議，自動建立對應的子地點
+        # Determine all required IDs
+        required_ids = [loc_id]
         for sub_id in tpl.get("suggested_sub_locations", []):
             sub_tpl = next((s for s in SUB_LOCATION_TEMPLATES if s["template_id"] == sub_id), None)
             if sub_tpl:
-                sub_loc = {
-                    "location_id": f"{loc_id}_{sub_tpl['location_id_suffix']}",
-                    "name": sub_tpl["label"],
-                    "location_type": "sub_location",
-                    "parent_location_id": loc_id,
-                    "is_visitable": True,
-                    "base_cost": 0,
-                    "available_time_slots": sub_tpl.get("available_time_slots", ["morning", "afternoon"]),
-                    "tags": sub_tpl.get("tags", []),
-                    "empty_behavior": "show_empty",
-                }
-                st.session_state["locations"].append(sub_loc)
-        st.rerun()
+                required_ids.append(f"{loc_id}_{sub_tpl['location_id_suffix']}")
+                
+        # Check if any required ID already exists
+        existing_ids = [l["location_id"] for l in st.session_state["locations"]]
+        conflict = next((r_id for r_id in required_ids if r_id in existing_ids), None)
+        if conflict:
+            st.error(f"無法套用模板：地點 ID '{conflict}' 已存在。請先刪除既有地點。")
+        else:
+            # 建立主要父地點（或獨立地點）
+            new_loc = {
+                "location_id": loc_id, "name": tpl["label"],
+                "location_type": tpl["location_type"],
+                "parent_location_id": None,
+                "is_visitable": tpl.get("is_visitable", False),
+                "base_cost": tpl.get("base_cost", 0),
+                "available_time_slots": tpl.get("available_time_slots", ["morning", "afternoon"]),
+                "tags": tpl.get("tags", []),
+                "empty_behavior": tpl.get("empty_behavior", "show_empty"),
+            }
+            st.session_state["locations"].append(new_loc)
+            
+            # 根據模板中的建議，自動建立對應的子地點
+            for sub_id in tpl.get("suggested_sub_locations", []):
+                sub_tpl = next((s for s in SUB_LOCATION_TEMPLATES if s["template_id"] == sub_id), None)
+                if sub_tpl:
+                    sub_loc = {
+                        "location_id": f"{loc_id}_{sub_tpl['location_id_suffix']}",
+                        "name": sub_tpl["label"],
+                        "location_type": "sub_location",
+                        "parent_location_id": loc_id,
+                        "is_visitable": True,
+                        "base_cost": 0,
+                        "available_time_slots": sub_tpl.get("available_time_slots", ["morning", "afternoon"]),
+                        "tags": sub_tpl.get("tags", []),
+                        "empty_behavior": "show_empty",
+                    }
+                    st.session_state["locations"].append(sub_loc)
+            st.rerun()
 
     # --- 手動新增 ---
     st.subheader("手動新增地點")
     with st.form("add_location", clear_on_submit=True):
         loc_id = st.text_input("地點 ID (英文)")
         loc_name = st.text_input("地點名稱")
-        loc_type = st.selectbox("類型", ["container", "sub_location", "standalone"])
+        loc_type_map = {"container": "主地點/區域(container)", "sub_location": "子地點(sub_location)", "standalone": "獨立地點(standalone)"}
+        loc_type = st.selectbox("類型", list(loc_type_map.keys()), format_func=lambda x: loc_type_map[x])
         
         # 尋找現有的 container 以供 sub_location 選擇為父地點
         containers = [l["location_id"] for l in st.session_state["locations"] if l["location_type"] == "container"]
@@ -407,8 +470,14 @@ def _tab_locations():
         
         # container 預設不可直接進入
         is_visit = st.checkbox("可進入", value=loc_type != "container")
-        slots = st.multiselect("可用時間段", ["morning", "afternoon", "evening"], default=["morning", "afternoon"])
-        tags = st.text_input("標籤 (逗號分隔)")
+        
+        slot_map = {"morning": "早上(morning)", "afternoon": "下午(afternoon)", "evening": "晚上(evening)"}
+        slots = st.multiselect("可用時間段", list(slot_map.keys()), default=["morning", "afternoon"], format_func=lambda x: slot_map[x])
+        
+        with st.expander("進階設定 (Advanced Settings)"):
+            st.markdown("💡 **標籤用途**：可輸入中文或英文，會提供給 AI 生成劇情時參考，不是系統 ID。<br>範例：適合約會、容易偶遇、正式場合、私密、吵雜、危險、浪漫、工作壓力。", unsafe_allow_html=True)
+            tags_str = st.text_input("標籤 (逗號分隔)")
+        
         
         if st.form_submit_button("新增地點"):
             new_loc = {
@@ -419,13 +488,13 @@ def _tab_locations():
                 "is_visitable": is_visit if loc_type != "container" else False,
                 "base_cost": 0,
                 "available_time_slots": slots,
-                "tags": [t.strip() for t in tags.split(",") if t.strip()],
+                "tags": [t.strip() for t in tags_str.split(",") if t.strip()],
                 "empty_behavior": "show_empty",
             }
             st.session_state["locations"].append(new_loc)
             st.rerun()
 
-    _next_page_button(PAGE_LABELS[3])
+    _next_page_button(PAGE_LABELS[2])
 
 
 def _tab_characters():
@@ -536,7 +605,7 @@ def _tab_characters():
                             ch["schedule"].append(entry)
                     st.rerun()
 
-    _next_page_button(PAGE_LABELS[2])
+    _next_page_button(PAGE_LABELS[3])
 
 
 def _tab_flags():
@@ -716,6 +785,23 @@ def main() -> None:
     6. Review & Export
     """
     st.set_page_config(page_title="Sandbox Dating Sim - UIW", layout="wide")
+    
+    # 注入 CSS 強制將所有 st.toast 彈出視窗移至畫面正中間
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stToastContainer"] {
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            bottom: auto !important;
+            right: auto !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    
     st.title("Sandbox Dating Sim — User Input Wizard")
     _init_state()
 
@@ -731,9 +817,9 @@ def main() -> None:
     elif selected_page == PAGE_LABELS[1]:
         _tab_protagonist()
     elif selected_page == PAGE_LABELS[2]:
-        _tab_characters()
-    elif selected_page == PAGE_LABELS[3]:
         _tab_locations()
+    elif selected_page == PAGE_LABELS[3]:
+        _tab_characters()
     elif selected_page == PAGE_LABELS[4]:
         _tab_flags()
     else:

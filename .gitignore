@@ -1,6 +1,8 @@
 .venv/
 .pytest_cache/
 .pytest_tmp/
+.pytest_tmp*/
+codex_test_tmp_run/
 .ruff_cache/
 .claude/
 .idea/

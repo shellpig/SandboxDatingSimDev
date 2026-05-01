@@ -151,3 +151,72 @@ def test_character_personality_tag_presets():
 def test_protagonist_default_age():
     """1-G-2: 主角預設年齡應驗證其值為 29。"""
     assert PROTAGONIST_DEFAULT_AGE == 29
+
+
+# --- 1-G-4 Specific Tests ---
+
+def test_1_g_4_required_templates_exist():
+    """1-G-4: 必須包含指定新增與保留的模板。"""
+    tpl_ids = [t["template_id"] for t in LOCATION_TEMPLATES]
+    required = [
+        "school_container", "shopping_street_container", "station_area_container",
+        "home_standalone", "cinema_standalone", "convenience_store_standalone",
+        "company_standalone", "park_standalone", "amusement_park_container",
+        "department_store_container", "hospital_standalone", "beach_container",
+        "hot_spring_inn_container", "night_market_standalone", "gym_standalone",
+        "library_standalone", "police_station_standalone", "art_museum_standalone",
+        "riverside_walk_standalone", "bar_standalone"
+    ]
+    for req in required:
+        assert req in tpl_ids, f"缺少要求的新增/保留模板: {req}"
+
+
+def test_1_g_4_station_area_sub_locations():
+    """1-G-4: 車站周邊必須產生月台/站前廣場/地下街。"""
+    station = next((t for t in LOCATION_TEMPLATES if t["template_id"] == "station_area_container"), None)
+    assert station is not None
+    subs = station.get("suggested_sub_locations", [])
+    assert "platform" in subs
+    assert "station_square" in subs
+    assert "underground_mall" in subs
+
+
+def test_1_g_4_sub_location_uses_suffix():
+    """1-G-4: 子地點模板必須定義 location_id_suffix，藉以在 UI 組成 <parent>_<suffix>。"""
+    for sub in SUB_LOCATION_TEMPLATES:
+        assert "location_id_suffix" in sub, f"子地點 {sub['template_id']} 缺少 location_id_suffix"
+        assert "location_id_suggestion" not in sub, f"子地點 {sub['template_id']} 不應有獨立的 location_id_suggestion"
+
+
+def test_1_g_4_time_slots_requirement():
+    """1-G-4: standalone 與 sub_location 必須有 available_time_slots，container 則不強制。"""
+    for tpl in LOCATION_TEMPLATES:
+        if tpl["location_type"] == "standalone":
+            assert "available_time_slots" in tpl, f"standalone 模板 {tpl['template_id']} 缺少 available_time_slots"
+    for sub in SUB_LOCATION_TEMPLATES:
+        assert "available_time_slots" in sub, f"sub_location 模板 {sub['template_id']} 缺少 available_time_slots"
+
+
+def test_1_g_4_convenience_store_name_distinction():
+    """1-G-4: 獨立便利商店與商店街便利商店，UI 顯示必須區分。"""
+    standalone = next((t for t in LOCATION_TEMPLATES if t["template_id"] == "convenience_store_standalone"), None)
+    assert standalone is not None
+    assert standalone["label"] == "便利商店(獨立)"
+
+    sub_loc = next((t for t in SUB_LOCATION_TEMPLATES if t["template_id"] == "convenience_store_sub"), None)
+    assert sub_loc is not None
+    assert sub_loc["label"] == "便利商店(商店街內)"
+
+
+def test_1_g_4_page_labels_order():
+    """1-G-4: 頁面順序必須為 World -> Protagonist -> Locations -> Characters -> Flags -> Review"""
+    from sandbox_dating_sim.ui.streamlit_uiw import PAGE_LABELS
+    expected = [
+        "世界觀與曆法(World)",
+        "主角設定(Protagonist)",
+        "地點與地圖(Locations)",
+        "角色設定(Characters)",
+        "旗標/狀態/結局(Flags/Status/Endings)",
+        "預覽與匯出(Review & Export)",
+    ]
+    assert PAGE_LABELS == expected
