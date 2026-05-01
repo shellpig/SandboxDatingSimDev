@@ -13,6 +13,21 @@
 
 `舊文件/` 目錄中的文件屬於歷史版本，可以完全忽略。閱讀需求、確認規格或實作時，只以根目錄目前保留的最新文件為準。
 
+## Project Skills
+
+本專案使用 `C:\Users\User\OneDrive\桌面\AI_Work\Skills\` 內的本機 skills。
+
+觸發規則：
+
+- 使用者要求診斷 bug、分析錯誤、驗證、找 root cause 時：
+  先讀 `C:\Users\User\OneDrive\桌面\AI_Work\Skills\engineering\diagnose\SKILL.md`
+- 使用者需求不明、規格討論、要求規劃、要求先問問題時：
+  先讀 `C:\Users\User\OneDrive\桌面\AI_Work\Skills\productivity\grill-me\SKILL.md`
+- 一般狀態、無緊急或特殊狀況時：
+  先讀 `C:\Users\User\OneDrive\桌面\AI_Work\Skills\productivity\caveman\SKILL.md`
+
+只有在使用者明確要求修改、修復、實作、commit 時才能改檔；若只是驗證或診斷，只能回報。
+
 ## 驗證模式規則
 
 當使用者要求「驗證」時，只能進行檢查、讀檔、執行測試、啟動本機服務與回報結果。
