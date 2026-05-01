@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.6 | 2026-05-01 | 補充 Phase 1-G-3：語意型欄位改為保存 `id + label`；主角與 NPC 秘密改為最多 3 個複選；新增職業與秘密預設選項；改善中文自訂輸入與系統 ID 欄位。 |
 | v1.2.5 | 2026-04-28 | 補充 Phase 1-G-2 使用者操作回饋：主角 ID 固定隱藏、性別/性取向/定位 UI 選項中文化、主角預設年齡 29、角色性格標籤預設選項，以及自訂 canonical ID 欄位英文輸入說明。 |
 | v1.2.4 | 2026-04-28 | 補充 Phase 1-G-1 使用者操作回饋：UIW 分頁順序與中文/英文導覽顯示、每頁下一頁按鈕、已選風格中文顯示、主角職業/性格/秘密預設選項，以及初始債務等級模式。 |
 | v1.2.3 | 2026-04-27 | 明確規定 `required_flags` / `forbidden_flags` 必須使用 `flag.<id> == <value>` 完整表達式；明確 `status_flags.effect` 為 list of dict 並只在資料層要求非空。 |
@@ -154,7 +155,7 @@ UI 顯示：
 
 - UI Label: 風格關鍵字
 - Field: `world.global_style`
-- Type: string array
+- Type: semantic choice array (`id + label`)
 - Required: at least 1
 - Max: 5
 
@@ -162,12 +163,15 @@ UI 顯示：
 
 ```yaml
 global_style:
-  - black_humor
-  - class_anxiety
-  - urban_romance
+  - id: black_humor
+    label: 黑色幽默
+  - id: class_anxiety
+    label: 階級焦慮
+  - id: urban_romance
+    label: 都市戀愛
 ```
 
-介面可讓使用者輸入中文，但送入生成層前應轉換或保留為穩定 tag。
+Phase 1-G-3 起，風格關鍵字必須同時保存英文 `id` 與中文 `label`。英文 `id` 供系統驗證與後續引用；中文 `label` 供使用者確認與 AI 生成劇情時理解語意。
 
 #### 風格參考詞庫
 
@@ -265,8 +269,16 @@ protagonist_id: protagonist
 
 - UI Label: 主角職業
 - Field: `protagonist.occupation`
-- Type: string
+- Type: semantic choice (`id + label`)
 - Required: true
+
+範例：
+
+```yaml
+occupation:
+  id: cafe_staff
+  label: 咖啡廳店員
+```
 
 ### 2.3 初始數值
 
@@ -328,13 +340,27 @@ Debt: auto_calculated_from_tier
 
 - UI Label: 性格描述
 - Field: `protagonist.personality`
-- Type: text
+- Type: semantic choice (`id + label`)
 - Required: true
 
 - UI Label: 主角的秘密
-- Field: `protagonist.secret`
-- Type: text
+- Field: `protagonist.secrets`
+- Type: semantic choice array (`id + label`)
 - Required: false
+- Max: 3
+
+範例：
+
+```yaml
+personality:
+  id: kind_but_tired
+  label: 善良但疲憊
+secrets:
+  - id: family_debt
+    label: 背負家族債務
+  - id: past_betrayal
+    label: 曾背叛重要的人
+```
 
 用途：
 
@@ -519,7 +545,7 @@ role_options:
 
 角色的 `personality_tags` 欄位必須提供可點選預設選項。
 
-預設選項顯示中文 label，寫入資料模型時保存英文 canonical ID。
+預設選項顯示中文 label。Phase 1-G-3 起，寫入資料模型時保存 `id + label`。
 
 範例：
 
@@ -539,11 +565,13 @@ character_personality_tag_presets:
     label: 認真努力
 ```
 
-使用者仍可新增自訂性格標籤，但自訂值必須符合 canonical ID 規則。
+使用者仍可新增自訂性格標籤。Phase 1-G-3 起，使用者輸入中文 label，由工具產生 canonical ID，最終保存 `id + label`。
 
 #### 自訂 ID 輸入說明
 
 凡是 UI 欄位名稱包含 `ID`，或輸入值會作為 canonical ID / tag 寫入 Setup Package 時，自訂輸入必須使用英文 canonical ID。
+
+Phase 1-G-3 起，職業、主角性格、主角秘密、世界風格與角色性格標籤等語意型欄位，不應要求一般使用者直接輸入英文 ID。UI 應提供中文自訂輸入框，按下「選擇」後由工具產生系統 ID，並保留可進階手動修改的系統 ID 欄位。
 
 規則：
 
@@ -578,6 +606,132 @@ UI 必須在相關欄位旁顯示說明文字。
 - 身分描述
 - 秘密描述
 - 結局描述
+
+### 2.8 Phase 1-G-3 UI 操作回饋規格
+
+Phase 1-G-3 解決「使用者用中文理解、AI 需要中文語意、系統需要英文 ID」三者落差。此階段會變更 Setup Package canonical schema：語意型選項不再只保存英文 ID 字串，而是保存 `id + label`。
+
+#### 語意型欄位
+
+下列欄位必須改為 `id + label`：
+
+```yaml
+world.global_style:
+  - id: urban_romance
+    label: 都市戀愛
+
+protagonist.occupation:
+  id: cafe_staff
+  label: 咖啡廳店員
+
+protagonist.personality:
+  id: kind_but_tired
+  label: 善良但疲憊
+
+protagonist.secrets:
+  - id: family_debt
+    label: 背負家族債務
+
+characters[].personality_tags:
+  - id: guarded
+    label: 戒心重
+
+characters[].secrets:
+  - id: family_scandal
+    label: 家族醜聞
+```
+
+純系統 ID 欄位維持英文 ID 字串，不改為 `id + label`，例如 `world_id`、`character_id`、`location_id`、`flag_id`、`status_id`、`ending_id`、`schedule_id`、`parent_location_id`、`target_character_id`。
+
+#### UI 輸入模式
+
+職業、主角性格、主角秘密、NPC 秘密、世界風格與角色性格標籤等語意型欄位，應採用一致 UI：
+
+- 上方：預設中文選項按鈕，點選後直接帶入對應 `id + label`。
+- 中間：自訂中文輸入框 +「選擇」按鈕。
+- 下方：系統 ID 欄位，自動填入，可進階手動修改。
+- 結果區：清楚顯示目前選擇，不再只用灰色 caption。
+
+結果區範例：
+
+```text
+目前選擇：咖啡廳店員
+系統 ID：cafe_staff
+```
+
+自訂中文輸入不稱為翻譯；工具行為定義為「依中文名稱產生穩定系統 ID」。不使用 AI 時，預設選項使用手寫 ID；自訂中文可先查內建對照表，找不到時使用 deterministic fallback，例如拼音 ID 或 hash ID。實作時需明確選定 fallback 策略並補測試。
+
+#### 主角職業預設選項
+
+保留 Phase 1-G-1 原本 8 個主角職業預設選項，並新增 8 個社會地位中到高的選項，總數為 16 個。
+
+新增選項：
+
+```yaml
+- id: rich_heir
+  label: 富二代
+- id: startup_founder
+  label: 新創公司老闆
+- id: tech_worker
+  label: 科技業
+- id: finance_professional
+  label: 金融業
+- id: doctor
+  label: 醫師
+- id: lawyer
+  label: 律師
+- id: university_lecturer
+  label: 大學講師
+- id: graphic_designer
+  label: 平面設計師
+```
+
+#### 主角與 NPC 秘密複選
+
+`protagonist.secret` 改為 `protagonist.secrets`。
+`characters[].secret` 改為 `characters[].secrets`。
+
+規則：
+
+- 每個主角或 NPC 最多選 3 個。
+- 可選預設項目。
+- 可新增自訂中文秘密。
+- 每個秘密保存 `id + label`。
+- UI 必須清楚顯示目前已選秘密。
+- `none = 沒有秘密` 若被選取，不可與其他秘密並存。
+
+新增 8 個秘密預設：
+
+```yaml
+- id: hidden_wealth
+  label: 其實家境富裕
+- id: criminal_record
+  label: 曾有犯罪紀錄
+- id: secret_childhood_friend
+  label: 隱瞞童年舊識
+- id: family_scandal
+  label: 家族醜聞
+- id: forbidden_relationship
+  label: 曾有禁忌戀情
+- id: fake_education
+  label: 學歷造假
+- id: underground_job
+  label: 從事地下工作
+- id: terminal_illness_in_family
+  label: 家人身患重病
+```
+
+#### 驗證規則
+
+UIW Linter 需新增或調整：
+
+- 語意型欄位的 `id` 必須符合 canonical ID 規則。
+- 語意型欄位的 `label` 不可為空。
+- `protagonist.secrets` 最多 3 個。
+- `characters[].secrets` 最多 3 個。
+- `none` 不可和其他秘密同時存在。
+- `characters[].personality_tags[].id` 不可重複。
+- `world.global_style[].id` 不可重複。
 
 ---
 
@@ -974,15 +1128,24 @@ empty_behavior:
 
 - UI Label: 性格標籤
 - Field: `characters[].personality_tags`
-- Type: string array
+- Type: semantic choice array (`id + label`)
 - Required: true
 
-Phase 1-G-2 起，Interactive UIW 應提供角色性格標籤預設選項。UI 顯示中文 label，寫入 `personality_tags` 時保存英文 canonical ID。
+Phase 1-G-2 起，Interactive UIW 應提供角色性格標籤預設選項。Phase 1-G-3 起，UI 顯示中文 label，寫入 `personality_tags` 時保存 `id + label`。
 
 - UI Label: 秘密
-- Field: `characters[].secret`
-- Type: text
+- Field: `characters[].secrets`
+- Type: semantic choice array (`id + label`)
 - Required: false
+- Max: 3
+
+Phase 1-G-3 起，NPC / Character 秘密與主角秘密使用同一格式與限制：
+
+```yaml
+secrets:
+  - id: family_scandal
+    label: 家族醜聞
+```
 
 - UI Label: 初始好感度
 - Field: `characters[].initial_favor`
@@ -1058,7 +1221,7 @@ AI 生成或推導 schedule 時，應避免產生「同角色、同時間段、�
 
 受控素材清單用於避免 AI 任意創造角色表情與服裝。
 
-UI 顯示中文，系統保存英文 ID。
+UI 顯示中文；受控素材選項保存 `id + label`，事件與 DSL 引用時使用其中的英文 `id`。
 
 #### 表情白名單
 
@@ -1390,10 +1553,10 @@ validation_report: {}
 2. 身分與位置合理化：當角色身分與行程位置不符時，AI 可在劇本中解釋原因，但該位置仍必須由 schedule 明確定義。
 3. 受控詞彙過濾：所有劇本資產標籤若超出白名單，必須由 Auto Repair Layer 嘗試映射或交由使用者確認。
 4. AI 推導內容必須寫回資料層：週末行程、建議 Flag、建議結局與素材標籤，不可只存在於 prompt 或臨時文本中。
-5. 使用者介面可中文化，但系統輸出必須使用 canonical ID。
+5. 使用者介面可中文化；純系統引用欄位必須使用 canonical ID，語意型欄位必須保存 `id + label`。
 6. Status Flag 必須具備生命週期：AI 不得生成沒有 `duration` 或 `clear_rule` 的負面狀態；引擎必須由 Status Manager 統一解除狀態。
 7. Schedule 衝突必須 deterministic：同角色同時間段若多個行程同時成立，Map Manager 必須依 Schedule Conflict Resolution 固定排序，不可交由 AI 或 runtime 隨機判定。
-8. UIW 應提供參考詞與模板：風格、地點、表情、服裝等常用欄位應提供可點選預設值，但輸出仍必須使用 canonical ID。
+8. UIW 應提供參考詞與模板：風格、地點、表情、服裝等常用欄位應提供可點選預設值；語意型選項需同時保存系統 ID 與中文 label。
 9. 主地點必須具備子地點：若建立 `container`，至少要建立一個可進入的 `sub_location`，否則 Setup Package 不得通過驗證。
 
 ## v1.2 與 v1.1 的主要差異

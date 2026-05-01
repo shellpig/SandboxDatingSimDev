@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2 | 2026-05-01 | 對齊 UIW Phase 1-G-3：Setup Package 語意型欄位改為保存 `id + label`，讓 AI 能讀取中文語意，系統仍使用英文 canonical ID。 |
 | v1.1 | 2026-04-27 | 將 Setup Package 範例中的 `uiw_version` 統一為 `1.2`，對齊 UIW 初始設定 v1.2。 |
 | v1.0 | 2026-04-27 | 初版，定義 Setup Package MD、Event Blueprint MD、Scene Draft MD 與分階段生成流程。 |
 
@@ -67,11 +68,25 @@ world:
     - morning
     - afternoon
     - evening
+  global_style:
+    - id: urban_romance
+      label: 都市戀愛
+    - id: black_humor
+      label: 黑色幽默
 
 protagonist:
   protagonist_id: protagonist
   name: 佑介
   gender: male
+  occupation:
+    id: cafe_staff
+    label: 咖啡廳店員
+  personality:
+    id: kind_but_tired
+    label: 善良但疲憊
+  secrets:
+    - id: family_debt
+      label: 背負家族債務
   initial_stats:
     INT: 5
     CHA: 6
@@ -84,6 +99,14 @@ characters:
   - character_id: sophie
     display_name: 蘇菲
     role: main_love_interest
+    personality_tags:
+      - id: guarded
+        label: 戒心重
+      - id: secretly_kind
+        label: 其實很溫柔
+    secrets:
+      - id: family_scandal
+        label: 家族醜聞
     initial_favor: 0
     allowed_emotions:
       - neutral
@@ -119,6 +142,8 @@ Setup Package MD 必須包含：
 - `endings`
 - `asset_vocabularies`
 - `alias_tables`
+
+使用者語意型欄位必須保存 `id + label`，例如 `world.global_style`、`protagonist.occupation`、`protagonist.personality`、`protagonist.secrets`、`characters[].personality_tags`、`characters[].secrets`。AI 讀取 Setup Package 時應使用中文 `label` 理解語意，工具與驗證器則使用英文 `id` 做穩定引用。
 
 ### 3.3 輸出與保存
 
@@ -292,6 +317,7 @@ User Input Wizard
 
 - UIW Linter
 - ID 檢查
+- 語意型欄位 `id + label` 檢查
 - schedule conflict 檢查
 - status flag lifecycle 檢查
 - asset vocabulary 檢查

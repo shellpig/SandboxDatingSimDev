@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.2 | 2026-05-01 | 補充 Phase 1-G-3：使用者語意型選項需保存 `id + label`，讓系統保有英文 canonical ID，同時讓 AI 取得中文語意。 |
 | v1.2.1 | 2026-04-27 | 更新內容生成文件管線引用至 `Sandbox_Dating_Sim_文件管線規格_v1.1.md`，以統一 `uiw_version: 1.2`。 |
 | v1.2 | 2026-04-27 | 新增 Map Manager、Controlled Asset Vocabulary、Auto Repair Layer、Critical Path Mode 與內容生成文件管線。 |
 
@@ -150,10 +151,15 @@ time_slots:
   - afternoon
   - evening
 global_style:
-  - black_humor
-  - class_anxiety
-  - urban_romance
+  - id: black_humor
+    label: 黑色幽默
+  - id: class_anxiety
+    label: 階級焦慮
+  - id: urban_romance
+    label: 都市戀愛
 ```
+
+`global_style` 屬於使用者語意型選項，必須同時保存英文 `id` 與中文 `label`。英文 `id` 供系統、驗證器與後續 DSL 引用；中文 `label` 供使用者檢查與 AI 生成劇情時理解語意。
 
 ### 4.2 Location
 
@@ -201,7 +207,7 @@ map_priority: normal
 - `initial_stats`
 - `initial_flags`
 - `personality`
-- `secret`
+- `secrets`
 
 核心數值：
 
@@ -211,6 +217,22 @@ map_priority: normal
 - `MORAL`
 - `Cash`
 - `Debt`
+
+Phase 1-G-3 起，`occupation`、`personality` 與 `secrets` 屬於使用者語意型欄位，需保存 `id + label`。
+
+範例：
+
+```yaml
+occupation:
+  id: cafe_staff
+  label: 咖啡廳店員
+personality:
+  id: kind_but_tired
+  label: 善良但疲憊
+secrets:
+  - id: family_debt
+    label: 背負家族債務
+```
 
 ### 4.4 Character
 
@@ -224,6 +246,7 @@ map_priority: normal
 - `orientation`
 - `role`
 - `personality_tags`
+- `secrets`
 - `initial_favor`
 - `secret_flags`
 - `schedule`
@@ -242,9 +265,15 @@ orientation:
   - male
 role: main_love_interest
 personality_tags:
-  - guarded
-  - proud
-  - secretly_kind
+  - id: guarded
+    label: 戒心重
+  - id: proud
+    label: 自尊心強
+  - id: secretly_kind
+    label: 其實很溫柔
+secrets:
+  - id: family_scandal
+    label: 家族醜聞
 initial_favor: 0
 secret_flags:
   - sophie_family_debt
@@ -264,6 +293,8 @@ allowed_positions:
   - center
   - right
 ```
+
+Phase 1-G-3 起，`characters[].personality_tags` 與 `characters[].secrets` 屬於使用者語意型欄位，需保存 `id + label`。角色秘密可作為 AI 生成角色行為、伏筆與事件前置條件的語意資料；若需作為邏輯判斷，仍應另以 `secret_flags` 或一般 `flags` 建立穩定條件。
 
 ## 5. Map Manager 與 Free Roam Resolution
 
