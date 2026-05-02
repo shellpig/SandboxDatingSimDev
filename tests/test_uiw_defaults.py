@@ -208,15 +208,16 @@ def test_1_g_4_convenience_store_name_distinction():
     assert sub_loc["label"] == "便利商店(商店街內)"
 
 
-def test_1_g_4_page_labels_order():
-    """1-G-4: 頁面順序必須為 World -> Protagonist -> Locations -> Characters -> Flags -> Review"""
+def test_1_g_6_page_labels_order():
+    """1-G-6: 頁面順序必須為 World -> Protagonist -> Locations -> Characters -> Flags & Status -> Endings -> Review"""
     from sandbox_dating_sim.ui.streamlit_uiw import PAGE_LABELS
     expected = [
         "世界觀與曆法(World)",
         "主角設定(Protagonist)",
         "地點與地圖(Locations)",
         "角色設定(Characters)",
-        "旗標/狀態/結局(Flags/Status/Endings)",
+        "旗標與狀態(Flags & Status)",
+        "結局(Endings)",
         "預覽與匯出(Review & Export)",
     ]
     assert PAGE_LABELS == expected

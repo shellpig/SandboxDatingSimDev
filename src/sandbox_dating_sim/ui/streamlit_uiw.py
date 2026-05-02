@@ -29,9 +29,29 @@ PAGE_LABELS = [
     "主角設定(Protagonist)",
     "地點與地圖(Locations)",
     "角色設定(Characters)",
-    "旗標/狀態/結局(Flags/Status/Endings)",
+    "旗標與狀態(Flags & Status)",
+    "結局(Endings)",
     "預覽與匯出(Review & Export)",
 ]
+
+def _collect_existing_ids() -> set[str]:
+    """收集全域已存在的系統 ID，用於跨類型唯一性檢查。"""
+    s: set[str] = set()
+    if st.session_state.get("world_id"):
+        s.add(st.session_state["world_id"])
+    s.update(c["character_id"] for c in st.session_state.get("characters", []) if c.get("character_id"))
+    s.update(l["location_id"] for l in st.session_state.get("locations", []) if l.get("location_id"))
+    s.update(f["flag_id"] for f in st.session_state.get("flags", []) if f.get("flag_id"))
+    s.update(sf["status_id"] for sf in st.session_state.get("status_flags", []) if sf.get("status_id"))
+    s.update(e["ending_id"] for e in st.session_state.get("endings", []) if e.get("ending_id"))
+    return s
+
+def _purge_ending_state(ending_id: str) -> None:
+    """清空指定結局的所有暫存 session state。"""
+    # 支援 _<ending_id> 結尾，以及 _<ending_id>_v 帶版本號後綴的 key
+    keys_to_drop = [k for k in list(st.session_state.keys()) if k.endswith(f"_{ending_id}") or f"_{ending_id}_v" in k or k == f"_ver_req_flags_{ending_id}" or k == f"_ver_forb_flags_{ending_id}"]
+    for k in keys_to_drop:
+        del st.session_state[k]
 
 
 def _init_state():
@@ -226,7 +246,7 @@ def _build_package() -> SetupPackage:
     這會在每次點擊驗證、預覽或匯出時被呼叫，用以確保資料符合 Canonical Schema 契約。
     """
     s = st.session_state
-    
+
     # 建立世界設定模型
     world = World(
         world_id=s["world_id"], title=s["title"],
@@ -234,7 +254,7 @@ def _build_package() -> SetupPackage:
         time_slots=["morning", "afternoon", "evening"],
         global_style=[SemanticChoice(**x) for x in s["global_style"]],
     )
-    
+
     # 建立主角與初始數值模型
     protag = Protagonist(
         protagonist_id=s["protag_id"], name=s["protag_name"],
@@ -246,7 +266,7 @@ def _build_package() -> SetupPackage:
             MORAL=s["MORAL"], Cash=s["Cash"], Debt=s["Debt"],
         ),
     )
-    
+
     # 組合並回傳完整的 SetupPackage
     return SetupPackage(
         world=world, protagonist=protag,
@@ -272,7 +292,7 @@ def _visitable_location_ids() -> list[str]:
 def _tab_world():
     """渲染「世界觀與曆法」設定分頁的 UI 元件。"""
     st.header("1. 世界觀與曆法")
-    
+
     # 基本設定欄位
     st.session_state["world_id"] = st.text_input("遊戲識別碼", st.session_state["world_id"])
     st.session_state["title"] = st.text_input("遊戲標題", st.session_state["title"])
@@ -287,10 +307,10 @@ def _tab_world():
 def _tab_protagonist():
     """渲染「主角設定」分頁的 UI 元件，包含基本身分與初始六維數值。"""
     st.header("2. 主角設定")
-    
+
     # 收集主角基本資料 (主角 ID 依 1-G-2 需求不再顯示，固定為 protagonist)
     st.session_state["protag_name"] = st.text_input("主角姓名", st.session_state["protag_name"])
-    
+
     gender_ids = [g["id"] for g in GENDER_OPTIONS]
     selected_gender = st.selectbox(
         "性別",
@@ -345,11 +365,11 @@ def _tab_locations():
     # --- 地點清單 ---
     if st.session_state["locations"]:
         st.subheader("目前地點")
-        
+
         loc_name_map = {loc["location_id"]: loc["name"] for loc in st.session_state["locations"]}
         printed_indices = set()
         display_order = []
-        
+
         for i, loc in enumerate(st.session_state["locations"]):
             if i in printed_indices:
                 continue
@@ -360,11 +380,11 @@ def _tab_locations():
                     if sub_loc.get("parent_location_id") == loc["location_id"] and j not in printed_indices:
                         display_order.append((j, sub_loc, True))
                         printed_indices.add(j)
-                        
+
         for i, loc in enumerate(st.session_state["locations"]):
             if i not in printed_indices:
                 display_order.append((i, loc, bool(loc.get("parent_location_id"))))
-                
+
         for i, loc, is_indented in display_order:
             parent_id = loc.get("parent_location_id")
             if parent_id:
@@ -372,9 +392,9 @@ def _tab_locations():
                 parent_str = f" (父: {parent_name})"
             else:
                 parent_str = ""
-                
+
             label = f"{loc['name']} [{loc['location_type']}]{parent_str}"
-            
+
             c1, c2 = st.columns([5, 1], vertical_alignment="center")
             with c1:
                 if is_indented:
@@ -407,18 +427,18 @@ def _tab_locations():
     st.subheader("套用地點模板")
     tpl_labels = [f"{t['label']} ({t['location_type']})" for t in LOCATION_TEMPLATES]
     tpl_idx = st.selectbox("選擇模板", range(len(LOCATION_TEMPLATES)), format_func=lambda i: tpl_labels[i])
-    
+
     if st.button("套用模板"):
         tpl = LOCATION_TEMPLATES[tpl_idx]
         loc_id = tpl.get("location_id_suggestion", tpl["template_id"])
-        
+
         # Determine all required IDs
         required_ids = [loc_id]
         for sub_id in tpl.get("suggested_sub_locations", []):
             sub_tpl = next((s for s in SUB_LOCATION_TEMPLATES if s["template_id"] == sub_id), None)
             if sub_tpl:
                 required_ids.append(f"{loc_id}_{sub_tpl['location_id_suffix']}")
-                
+
         # Check if any required ID already exists
         existing_ids = [l["location_id"] for l in st.session_state["locations"]]
         conflict = next((r_id for r_id in required_ids if r_id in existing_ids), None)
@@ -437,7 +457,7 @@ def _tab_locations():
                 "empty_behavior": tpl.get("empty_behavior", "show_empty"),
             }
             st.session_state["locations"].append(new_loc)
-            
+
             # 根據模板中的建議，自動建立對應的子地點
             for sub_id in tpl.get("suggested_sub_locations", []):
                 sub_tpl = next((s for s in SUB_LOCATION_TEMPLATES if s["template_id"] == sub_id), None)
@@ -463,22 +483,22 @@ def _tab_locations():
         loc_name = st.text_input("地點名稱")
         loc_type_map = {"container": "主地點/區域(container)", "sub_location": "子地點(sub_location)", "standalone": "獨立地點(standalone)"}
         loc_type = st.selectbox("類型", list(loc_type_map.keys()), format_func=lambda x: loc_type_map[x])
-        
+
         # 尋找現有的 container 以供 sub_location 選擇為父地點
         containers = [l["location_id"] for l in st.session_state["locations"] if l["location_type"] == "container"]
         parent = st.selectbox("父地點", [None] + containers)
-        
+
         # container 預設不可直接進入
         is_visit = st.checkbox("可進入", value=loc_type != "container")
-        
+
         slot_map = {"morning": "早上(morning)", "afternoon": "下午(afternoon)", "evening": "晚上(evening)"}
         slots = st.multiselect("可用時間段", list(slot_map.keys()), default=["morning", "afternoon"], format_func=lambda x: slot_map[x])
-        
+
         with st.expander("進階設定 (Advanced Settings)"):
             st.markdown("💡 **標籤用途**：可輸入中文或英文，會提供給 AI 生成劇情時參考，不是系統 ID。<br>範例：適合約會、容易偶遇、正式場合、私密、吵雜、危險、浪漫、工作壓力。", unsafe_allow_html=True)
             tags_str = st.text_input("標籤 (逗號分隔)")
-        
-        
+
+
         if st.form_submit_button("新增地點"):
             new_loc = {
                 "location_id": loc_id, "name": loc_name,
@@ -519,10 +539,10 @@ def _tab_characters():
         st.subheader("目前角色")
         for i, ch in enumerate(list(st.session_state["characters"])):
             c_id = ch["character_id"]
-            
+
             gender_label = _preset_label(ch["gender"], GENDER_OPTIONS)
             role_label = _preset_label(ch["role"], ROLE_OPTIONS)
-            
+
             c1, c2 = st.columns([5, 1], vertical_alignment="center")
             with c1:
                 with st.expander(f"{ch['display_name']} · {gender_label} · {role_label}"):
@@ -537,31 +557,31 @@ def _tab_characters():
                     st.markdown("**[基本資訊]**")
                     with st.container():
                         e_name = st.text_input("顯示名稱", value=ch["display_name"], key=f"edit_display_name_{c_id}")
-                        
+
                         gender_ids = [g["id"] for g in GENDER_OPTIONS]
                         idx_g = gender_ids.index(ch["gender"]) if ch["gender"] in gender_ids else 0
                         e_gender = st.selectbox("性別", gender_ids, index=idx_g, format_func=lambda x: _preset_label(x, GENDER_OPTIONS), key=f"edit_gender_{c_id}")
-                        
+
                         orient_ids = [o["id"] for o in ORIENTATION_OPTIONS]
                         e_orient = st.multiselect("性取向", orient_ids, default=ch.get("orientation", ["heterosexual"]), format_func=lambda x: _preset_label(x, ORIENTATION_OPTIONS), key=f"edit_orientation_{c_id}")
-                        
+
                         role_ids = [r["id"] for r in ROLE_OPTIONS]
                         idx_r = role_ids.index(ch["role"]) if ch["role"] in role_ids else 0
                         e_role = st.selectbox("定位", role_ids, index=idx_r, format_func=lambda x: _preset_label(x, ROLE_OPTIONS), key=f"edit_role_{c_id}")
-                        
+
                         e_identity = st.text_input("身分描述", value=ch.get("identity", ""), key=f"edit_identity_{c_id}")
                         e_favor = st.number_input("初始好感度", value=ch.get("initial_favor", 0), key=f"edit_initial_favor_{c_id}")
-                    
+
                     st.markdown("**[性格與秘密]**")
                     _semantic_choice_input("性格標籤", tag_key, CHARACTER_PERSONALITY_TAG_PRESETS, allow_multiple=True)
                     _semantic_choice_input("角色秘密 (最多3個)", sec_key, SECRET_PRESETS, allow_multiple=True, max_items=3, separate_none=True)
-                    
+
                     st.markdown("**[角色行程]**")
                     day_type_map = {"weekday": "平日", "weekend": "週末", "holiday": "假日", "any": "任意"}
                     time_slot_map = {"morning": "早上", "afternoon": "下午", "evening": "晚上"}
                     prio_map = {"critical": "必定", "route": "路線", "normal": "一般", "ambient": "環境"}
                     loc_name_map = {loc["location_id"]: loc["name"] for loc in st.session_state["locations"]}
-                    
+
                     if ch.get("schedule"):
                         for s_idx, sch in enumerate(list(ch["schedule"])):
                             d_str = day_type_map.get(sch["day_type"], sch["day_type"])
@@ -569,7 +589,7 @@ def _tab_characters():
                             p_str = prio_map.get(sch["priority"], sch["priority"])
                             l_id = sch["location_id"]
                             l_str = loc_name_map.get(l_id, f"{l_id} (地點已刪除)")
-                            
+
                             c_sch1, c_sch2 = st.columns([5, 1], vertical_alignment="center")
                             with c_sch1:
                                 st.write(f"• {d_str} {t_str} @ {l_str} [{p_str}] order={sch['schedule_order']}")
@@ -579,7 +599,7 @@ def _tab_characters():
                                     st.rerun()
                     else:
                         st.write("尚無行程")
-                    
+
                     vis_locs = _visitable_location_ids()
                     if not vis_locs:
                         st.warning("尚無可進入地點，請先在地點頁建立。")
@@ -593,7 +613,7 @@ def _tab_characters():
                             sch_prio = st.selectbox("優先權", ["critical", "route", "normal", "ambient"], format_func=lambda x: f"{prio_map.get(x,x)}({x})", key=f"add_sch_prio_{c_id}")
                             sch_order = st.number_input("排序值 (越小越優先)", value=20, key=f"add_sch_order_{c_id}")
                             sch_cond = st.text_input("條件 (逗號分隔，可選)", key=f"add_sch_cond_{c_id}")
-                            
+
                             if st.form_submit_button("新增行程"):
                                 entry = {
                                     "schedule_id": sch_id, "day_type": sch_day,
@@ -606,11 +626,11 @@ def _tab_characters():
 
                     st.markdown("**[進階設定 (Advanced Settings)]**")
                     show_adv = st.checkbox("顯示進階設定", key=f"show_adv_{c_id}")
-                    
+
                     emo_labels = [e["label"] for e in EMOTION_PRESETS]
                     cos_labels = [c["label"] for c in COSTUME_PRESETS]
                     pos_labels = [p["label"] for p in POSITION_PRESETS]
-                    
+
                     cur_emo = [item["label"] for item in ch.get("allowed_emotions", []) if item["label"] in emo_labels]
                     cur_cos = [item["label"] for item in ch.get("allowed_costumes", []) if item["label"] in cos_labels]
                     cur_pos = [item["label"] for item in ch.get("allowed_positions", []) if item["label"] in pos_labels]
@@ -638,18 +658,18 @@ def _tab_characters():
                             ch["initial_favor"] = e_favor
                             ch["personality_tags"] = list(st.session_state[tag_key])
                             ch["secrets"] = list(st.session_state[sec_key])
-                            
+
                             def _resolve_presets(sel_labels, presets):
                                 return [{"id": p["id"], "label": p["label"]} for p in presets if p["label"] in sel_labels]
-                            
+
                             ch["allowed_emotions"] = _resolve_presets(e_emo, EMOTION_PRESETS)
                             ch["allowed_costumes"] = _resolve_presets(e_cos, COSTUME_PRESETS)
                             ch["allowed_positions"] = _resolve_presets(e_pos, POSITION_PRESETS)
-                            
+
                             del st.session_state[tag_key]
                             del st.session_state[sec_key]
                             st.rerun()
-                            
+
                     with col_cancel:
                         if st.button("取消", key=f"cancel_ch_{c_id}"):
                             if tag_key in st.session_state: del st.session_state[tag_key]
@@ -701,7 +721,7 @@ def _tab_characters():
         emo_labels = [e["label"] for e in EMOTION_PRESETS]
         cos_labels = [c["label"] for c in COSTUME_PRESETS]
         pos_labels = [p["label"] for p in POSITION_PRESETS]
-        
+
         st.markdown("**表情白名單**")
         sel_emo = st.multiselect("選擇表情", emo_labels, default=[e["label"] for e in EMOTION_PRESETS[:3]])
         st.markdown("**服裝白名單**")
@@ -717,10 +737,10 @@ def _tab_characters():
             elif not re.match(r"^[a-z][a-z0-9_]*$", ch_id):
                 st.error("角色 ID 格式錯誤 (須為小寫英文、數字、底線，且以英文字母開頭)")
                 valid = False
-            elif any(c["character_id"] == ch_id for c in st.session_state.get("characters", [])):
-                st.error("角色 ID 已存在")
+            elif ch_id in _collect_existing_ids():
+                st.error("角色 ID 已存在 (與既有 ID 衝突)")
                 valid = False
-                
+
             if valid:
                 def _parse_presets_new(selected_labels, presets):
                     return [{"id": p["id"], "label": p["label"]} for p in presets if p["label"] in selected_labels]
@@ -757,7 +777,7 @@ def _tab_flags():
     if st.session_state["flags"]:
         for i, f in enumerate(st.session_state["flags"]):
             st.write(f"• {f['flag_id']} ({f['type']}) = {f['initial_value']} — {f['description']}")
-            
+
     with st.form("add_flag", clear_on_submit=True):
         f_id = st.text_input("Flag ID")
         f_type = st.selectbox("型別", ["boolean", "integer", "string", "enum"])
@@ -781,7 +801,7 @@ def _tab_flags():
     if st.session_state["status_flags"]:
         for sf in st.session_state["status_flags"]:
             st.write(f"• {sf['status_id']} — {sf['description']}")
-            
+
     with st.form("add_status_flag", clear_on_submit=True):
         sf_id = st.text_input("Status ID")
         sf_label = st.text_input("顯示名稱")
@@ -795,7 +815,7 @@ def _tab_flags():
                                                 "on_event_result", "on_location_visit", "manual_only"])
         sf_desc = st.text_input("說明")
         sf_perm_reason = st.text_input("永久原因（若 permanent）", "")
-        
+
         if st.form_submit_button("新增 Status Flag"):
             entry = {
                 "status_id": sf_id, "label": sf_label, "target": sf_target,
@@ -808,64 +828,243 @@ def _tab_flags():
             st.session_state["status_flags"].append(entry)
             st.rerun()
 
-    # --- Endings (結局定義) ---
-    st.subheader("結局 (Endings)")
+    _next_page_button(PAGE_LABELS[4])
+
+
+def _tab_endings():
+    """
+    渲染「結局」分頁。
+    """
+    st.header("6. 結局")
+
+    priority_map = {
+        "critical": "必定觸發(critical)",
+        "main": "主線(main)",
+        "route": "路線(route)",
+        "normal": "一般(normal)",
+        "ambient": "背景(ambient)"
+    }
+    priority_short_map = {
+        "critical": "必定觸發",
+        "main": "主線",
+        "route": "路線",
+        "normal": "一般",
+        "ambient": "背景"
+    }
+
     if st.session_state["endings"]:
         for e_idx, e in enumerate(list(st.session_state["endings"])):
+            e_id = e["ending_id"]
+            title_display = e.get("title") or e_id
+            prio_display = priority_short_map.get(e.get("priority", "normal"), e.get("priority", "normal"))
+
+            # Target character display
+            target_id = e.get("target_character_id")
+            if target_id is None:
+                target_display = "（無）"
+            elif target_id == "global":
+                target_display = "全局結局"
+            else:
+                ch = next((c for c in st.session_state.get("characters", []) if c["character_id"] == target_id), None)
+                if ch:
+                    target_display = ch["display_name"]
+                else:
+                    target_display = f"{target_id} (角色已刪除)"
+
+            label = f"{title_display} · {prio_display} · {target_display}"
+
             c_end1, c_end2 = st.columns([5, 1], vertical_alignment="center")
             with c_end1:
-                st.write(f"• {e['ending_id']} — {e['title']}")
+                with st.expander(label):
+                    st.markdown("**[基本資訊]**")
+                    with st.container():
+                        st.text(f"結局 ID: {e_id}")
+
+                        edit_title = st.text_input("結局標題", value=e.get("title", ""), key=f"edit_title_{e_id}")
+                        edit_type = st.text_input("結局類型", value=e.get("ending_type", ""), key=f"edit_ending_type_{e_id}")
+
+                        # Target selectbox
+                        ch_options = [None, "global"] + [c["character_id"] for c in st.session_state.get("characters", [])]
+                        if target_id not in ch_options:
+                            ch_options.append(target_id)
+
+                        def format_target(tid):
+                            if tid is None: return "（無 / 不指定）"
+                            if tid == "global": return "全局結局 (global)"
+                            tc = next((c for c in st.session_state.get("characters", []) if c["character_id"] == tid), None)
+                            if tc: return tc["display_name"]
+                            return f"{tid} (角色已刪除)"
+
+                        idx_t = ch_options.index(target_id) if target_id in ch_options else 0
+                        edit_target = st.selectbox("關聯角色", ch_options, index=idx_t, format_func=format_target, key=f"edit_target_{e_id}")
+
+                        edit_desc = st.text_input("結局描述", value=e.get("description", ""), key=f"edit_description_{e_id}")
+
+                        prio_options = ["critical", "main", "route", "normal", "ambient"]
+                        idx_p = prio_options.index(e.get("priority", "normal")) if e.get("priority", "normal") in prio_options else 3
+                        edit_prio = st.selectbox("優先權", prio_options, index=idx_p, format_func=lambda x: priority_map.get(x, x), key=f"edit_priority_{e_id}")
+                        st.caption("優先權由高到低：\ncritical: 強制觸發，覆蓋其他所有結局\nmain: 主線結局\nroute: 角色路線結局\nnormal: 一般結局\nambient: 背景/支線結局，最低優先")
+
+                        edit_rtags = st.text_input("路線標籤 (逗號分隔)", value=",".join(e.get("route_tags", [])), key=f"edit_route_tags_{e_id}")
+
+                    st.markdown("**[條件]**")
+
+                    # required flags
+                    st.markdown("── 必須條件 (required_flags) ──")
+                    req_key = f"temp_req_flags_{e_id}"
+                    if req_key not in st.session_state:
+                        st.session_state[req_key] = list(e.get("required_flags", []))
+
+                    flag_ids = [f["flag_id"] for f in st.session_state.get("flags", [])]
+
+                    if not flag_ids:
+                        st.multiselect("選擇旗標", [], key=f"ms_req_flags_{e_id}", disabled=True)
+                        st.caption("尚未設定旗標。可在『旗標與狀態』分頁建立後再回此處快速加入")
+                    else:
+                        req_ver = st.session_state.get(f"_ver_req_flags_{e_id}", 0)
+                        req_sel = st.multiselect("選擇旗標", flag_ids, key=f"ms_req_flags_{e_id}_v{req_ver}")
+                        if st.button("加入到必須條件", key=f"add_req_flags_{e_id}"):
+                            for fid in req_sel:
+                                fdef = next((f for f in st.session_state["flags"] if f["flag_id"] == fid), None)
+                                if fdef:
+                                    if fdef["type"] == "boolean":
+                                        expr = f"flag.{fid} == true"
+                                    elif fdef["type"] == "integer":
+                                        expr = f"flag.{fid} == {fdef['initial_value']}"
+                                    else: # string, enum
+                                        # handle escaping
+                                        val = str(fdef['initial_value']).replace("\\", "\\\\").replace('"', '\\"')
+                                        expr = f'flag.{fid} == "{val}"'
+                                    if expr not in st.session_state[req_key]:
+                                        st.session_state[req_key].append(expr)
+                            # Increment version instead of clearing widget value
+                            st.session_state[f"_ver_req_flags_{e_id}"] = req_ver + 1
+                            st.rerun()
+
+                    # forbidden flags
+                    st.markdown("── 禁止條件 (forbidden_flags) ──")
+                    forb_key = f"temp_forb_flags_{e_id}"
+                    if forb_key not in st.session_state:
+                        st.session_state[forb_key] = list(e.get("forbidden_flags", []))
+
+                    if not flag_ids:
+                        st.multiselect("選擇旗標", [], key=f"ms_forb_flags_{e_id}", disabled=True)
+                        st.caption("尚未設定旗標。可在『旗標與狀態』分頁建立後再回此處快速加入")
+                    else:
+                        forb_ver = st.session_state.get(f"_ver_forb_flags_{e_id}", 0)
+                        forb_sel = st.multiselect("選擇旗標", flag_ids, key=f"ms_forb_flags_{e_id}_v{forb_ver}")
+                        if st.button("加入到禁止條件", key=f"add_forb_flags_{e_id}"):
+                            for fid in forb_sel:
+                                fdef = next((f for f in st.session_state["flags"] if f["flag_id"] == fid), None)
+                                if fdef:
+                                    if fdef["type"] == "boolean":
+                                        expr = f"flag.{fid} == true"
+                                    elif fdef["type"] == "integer":
+                                        expr = f"flag.{fid} == {fdef['initial_value']}"
+                                    else: # string, enum
+                                        val = str(fdef['initial_value']).replace("\\", "\\\\").replace('"', '\\"')
+                                        expr = f'flag.{fid} == "{val}"'
+                                    if expr not in st.session_state[forb_key]:
+                                        st.session_state[forb_key].append(expr)
+                            st.session_state[f"_ver_forb_flags_{e_id}"] = forb_ver + 1
+                            st.rerun()
+
+                    with st.form(f"form_edit_cond_{e_id}"):
+                        edit_req_flags = st.text_area("required_flags (逗號或換行分隔)", value=",\n".join(st.session_state[req_key]), key=f"edit_req_flags_{e_id}")
+                        edit_forb_flags = st.text_area("forbidden_flags (逗號或換行分隔)", value=",\n".join(st.session_state[forb_key]), key=f"edit_forb_flags_{e_id}")
+
+                        st.markdown("── 必須數值 (required_stats) ──")
+                        edit_req_stats = st.text_input("required_stats (逗號分隔)", value=",".join(e.get("required_stats", [])), key=f"edit_req_stats_{e_id}")
+
+                        st.divider()
+                        col_save, col_cancel, _ = st.columns([1, 1, 4])
+                        with col_save:
+                            if st.form_submit_button("儲存修改"):
+                                e["title"] = edit_title
+                                e["ending_type"] = edit_type
+                                e["target_character_id"] = edit_target if edit_target else None
+                                e["description"] = edit_desc
+                                e["priority"] = edit_prio
+                                e["route_tags"] = [x.strip() for x in edit_rtags.split(",") if x.strip()]
+
+                                # parsing text areas: split by newline and comma
+                                req_list = []
+                                for line in edit_req_flags.replace("\n", ",").split(","):
+                                    if line.strip(): req_list.append(line.strip())
+                                e["required_flags"] = req_list
+                                st.session_state[req_key] = req_list
+
+                                forb_list = []
+                                for line in edit_forb_flags.replace("\n", ",").split(","):
+                                    if line.strip(): forb_list.append(line.strip())
+                                e["forbidden_flags"] = forb_list
+                                st.session_state[forb_key] = forb_list
+
+                                e["required_stats"] = [x.strip() for x in edit_req_stats.split(",") if x.strip()]
+
+                                st.rerun()
+                        with col_cancel:
+                            if st.form_submit_button("取消"):
+                                def _reset_ending_edit_state(eid: str):
+                                    # 支援 _<eid> 結尾，以及 _<eid>_v 帶版本號後綴的 key
+                                    keys_to_clear = [k for k in list(st.session_state.keys()) if ((k.endswith(f"_{eid}") or f"_{eid}_v" in k) and (k.startswith("edit_") or k.startswith("temp_") or k.startswith("ms_"))) or k == f"_ver_req_flags_{eid}" or k == f"_ver_forb_flags_{eid}"]
+                                    for k in keys_to_clear:
+                                        del st.session_state[k]
+
+                                _reset_ending_edit_state(e_id)
+                                st.rerun()
+
             with c_end2:
-                if st.button("刪除", key=f"del_ending_{e['ending_id']}"):
+                if st.button("刪除", key=f"del_end_{e_id}"):
                     st.session_state["endings"].pop(e_idx)
+                    _purge_ending_state(e_id)
                     st.rerun()
-            
+
+    st.subheader("新增結局")
     with st.form("add_ending", clear_on_submit=True):
         e_id = st.text_input("Ending ID")
         e_title = st.text_input("結局標題")
         e_type = st.text_input("結局類型 (例: character_good)")
-        ch_ids = [ch["character_id"] for ch in st.session_state["characters"]]
-        e_target = st.selectbox("關聯角色", [None, "global"] + ch_ids)
+
+        ch_options = [None, "global"] + [c["character_id"] for c in st.session_state.get("characters", [])]
+        def format_target(tid):
+            if tid is None: return "（無 / 不指定）"
+            if tid == "global": return "全局結局 (global)"
+            tc = next((c for c in st.session_state.get("characters", []) if c["character_id"] == tid), None)
+            if tc: return tc["display_name"]
+            return f"{tid} (角色已刪除)"
+
+        e_target = st.selectbox("關聯角色", ch_options, format_func=format_target)
         e_desc = st.text_input("結局描述")
         e_req_flags = st.text_input("required_flags (逗號分隔)")
         e_req_stats = st.text_input("required_stats (逗號分隔)")
         e_forb_flags = st.text_input("forbidden_flags (逗號分隔)")
-        e_prio = st.selectbox("優先權", ["normal", "critical", "main", "route", "ambient"])
+        e_prio = st.selectbox("優先權", ["critical", "main", "route", "normal", "ambient"], index=3, format_func=lambda x: priority_map.get(x, x))
+        st.caption("優先權由高到低：\ncritical: 強制觸發，覆蓋其他所有結局\nmain: 主線結局\nroute: 角色路線結局\nnormal: 一般結局\nambient: 背景/支線結局，最低優先")
         e_rtags = st.text_input("route_tags (逗號分隔)")
-        
+
         if st.form_submit_button("新增結局"):
             # 即時驗證：Ending ID
             if not e_id:
                 st.error("Ending ID 不可為空")
+            elif not re.match(r"^[a-z][a-z0-9_]*$", e_id):
+                st.error("Ending ID 格式錯誤 (須為小寫英文、數字、底線，且以英文字母開頭)")
+            elif e_id in _collect_existing_ids():
+                st.error("Ending ID 已存在 (與既有 ID 衝突)")
             else:
-                # 收集全域已存在的 ID
-                used_ids: dict[str, str] = {}
-                used_ids[st.session_state.get("world_id", "")] = "world.world_id"
-                for ch in st.session_state.get("characters", []):
-                    used_ids[ch["character_id"]] = f"characters[{ch['character_id']}].character_id"
-                for loc in st.session_state.get("locations", []):
-                    used_ids[loc["location_id"]] = f"locations[{loc['location_id']}].location_id"
-                for fl in st.session_state.get("flags", []):
-                    used_ids[fl["flag_id"]] = f"flags[{fl['flag_id']}].flag_id"
-                for en in st.session_state.get("endings", []):
-                    used_ids[en["ending_id"]] = f"endings[{en['ending_id']}].ending_id"
+                st.session_state["endings"].append({
+                    "ending_id": e_id, "title": e_title, "ending_type": e_type,
+                    "target_character_id": e_target if e_target else None,
+                    "description": e_desc,
+                    "required_flags": [x.strip() for x in e_req_flags.split(",") if x.strip()],
+                    "required_stats": [x.strip() for x in e_req_stats.split(",") if x.strip()],
+                    "forbidden_flags": [x.strip() for x in e_forb_flags.split(",") if x.strip()],
+                    "priority": e_prio,
+                    "route_tags": [x.strip() for x in e_rtags.split(",") if x.strip()],
+                })
+                st.rerun()
 
-                if e_id in used_ids:
-                    st.error(f"Ending ID 已被 {used_ids[e_id]} 使用，請換一個 ID。")
-                else:
-                    st.session_state["endings"].append({
-                        "ending_id": e_id, "title": e_title, "ending_type": e_type,
-                        "target_character_id": e_target if e_target else None,
-                        "description": e_desc,
-                        "required_flags": [x.strip() for x in e_req_flags.split(",") if x.strip()],
-                        "required_stats": [x.strip() for x in e_req_stats.split(",") if x.strip()],
-                        "forbidden_flags": [x.strip() for x in e_forb_flags.split(",") if x.strip()],
-                        "priority": e_prio,
-                        "route_tags": [x.strip() for x in e_rtags.split(",") if x.strip()],
-                    })
-                    st.rerun()
-
-    _next_page_button(PAGE_LABELS[4])
+    _next_page_button(PAGE_LABELS[5])
 
 
 def _tab_review():
@@ -874,7 +1073,7 @@ def _tab_review():
     用以將前述表單收集到的 session_state 資料轉換為 SetupPackage，
     並呼叫 UIWLinter 執行業務邏輯檢查，最後預覽並輸出 Markdown 檔案。
     """
-    st.header("6. 預覽與匯出")
+    st.header("7. 預覽與匯出")
 
     try:
         pkg = _build_package()
@@ -891,7 +1090,7 @@ def _tab_review():
             st.success("驗證通過 ✅")
         else:
             st.error(f"驗證未通過 ❌ — {len(report.issues)} 個問題")
-        
+
         # 逐一顯示 issue，以 error 或 warning 的顏色提示
         for issue in report.issues:
             if issue.severity == "error":
@@ -914,7 +1113,7 @@ def _tab_review():
             # 依據新需求，按下匯出時必須顯示驗證狀態
             linter = UIWLinter()
             report = linter.validate(pkg)
-            
+
             if report.status == "failed":
                 st.error("匯出失敗：資料驗證未通過 ❌")
                 st.warning("請修正以下主要問題：")
@@ -942,11 +1141,12 @@ def main() -> None:
     2. Protagonist
     3. Locations & Map
     4. Characters & Schedule
-    5. Flags / Status / Endings
-    6. Review & Export
+    5. Flags & Status
+    6. Endings
+    7. Review & Export
     """
     st.set_page_config(page_title="Sandbox Dating Sim - UIW", layout="wide")
-    
+
     # 注入 CSS 強制將所有 st.toast 彈出視窗移至畫面正中間
     st.markdown(
         """
@@ -962,7 +1162,7 @@ def main() -> None:
         """,
         unsafe_allow_html=True,
     )
-    
+
     st.title("Sandbox Dating Sim — User Input Wizard")
     _init_state()
 
@@ -983,6 +1183,8 @@ def main() -> None:
         _tab_characters()
     elif selected_page == PAGE_LABELS[4]:
         _tab_flags()
+    elif selected_page == PAGE_LABELS[5]:
+        _tab_endings()
     else:
         _tab_review()
 
