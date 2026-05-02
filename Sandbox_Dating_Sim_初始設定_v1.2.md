@@ -4,8 +4,9 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.12 | 2026-05-01 | 新增 Phase 1-G-6 規格：拆分旗標/狀態與結局為兩個分頁、結局頁 inline expander 編輯、priority 中文化 + 五級語意 caption、`target_character_id` 中文 selectbox、`required_flags` / `forbidden_flags` F-γ multiselect 快速加入、最小可用 Setup Package 匯出驗收；附帶修正 1-G-5 character_id 即時擋為跨類型唯一（UI 層含 `status_id`）。 |
 | v1.2.11 | 2026-05-01 | 補強 Phase 1-G-5 Streamlit 實作限制：禁止 nested `st.expander`、所有編輯 widget 採 per-character keyed pattern、新增角色擋空/重複/非法 `character_id` 並禁止編輯期修改 `character_id`、刪除角色後清空相關 session state。 |
-| v1.2.10 | 2026-05-01 | 補充 Phase 1-G-5 角色設定頁面 UX 完整化：角色清單顯示與刪除引用防呆、inline expander 編輯、行程清單與新增搬入編輯區、行程 enum 中文化、白名單顯示與進階設定收納；明確排除 NPC ID 中文化（1-G-6）與 schedule `specific_date` schema 升級（待後續 phase）。 |
+| v1.2.10 | 2026-05-01 | 補充 Phase 1-G-5 角色設定頁面 UX 完整化：角色清單顯示與刪除引用防呆、inline expander 編輯、行程清單與新增搬入編輯區、行程 enum 中文化、白名單顯示與進階設定收納；明確排除 NPC ID 中文化（現排 1-G-7）與 schedule `specific_date` schema 升級（待後續 phase）。 |
 | v1.2.9 | 2026-05-01 | 修正 Phase 1-G-4 地點模板規格：明確子地點 ID 由父地點 ID 與 suffix 組成、保留既有 standalone 模板，並區分同名便利商店模板顯示。 |
 | v1.2.8 | 2026-05-01 | 補充 Phase 1-G-4 地點與地圖調整：地點頁順序提前、擴充模板、刪除引用防呆、中文化地點類型與可使用時段，並將 tags 定義為 AI 劇情參考用進階設定。 |
 | v1.2.7 | 2026-05-01 | 補充 Phase 1-G-3 完成後規則：`none = 沒有秘密` 僅為 UI 清空操作，canonical data 以 `secrets: []` 表示沒有秘密；記錄 1-G-3 實作完成項目。 |
@@ -1807,7 +1808,7 @@ Phase 1-G-5 是使用者實際操作 Interactive UIW 角色設定頁後的操作
 
 排除：
 
-- **NPC 角色 ID 中文化（B 群組）**：NPC `character_id` 於 1-G-5 仍由使用者輸入英文，並於編輯 expander 進階設定中以唯讀文字顯示。Phase 1-G-6 將比照 1-G-3「中文 label → 工具產 canonical ID」處理 NPC ID 輸入體驗。
+- **NPC 角色 ID 中文化（B 群組）**：NPC `character_id` 於 1-G-5 仍由使用者輸入英文，並於編輯 expander 進階設定中以唯讀文字顯示。Phase 1-G-7 將比照 1-G-3「中文 label → 工具產 canonical ID」處理 NPC ID 輸入體驗。
 - **`day_type = specific_date` schema 補日期欄位（D2）**：1-G-5 的處理方式為「在 UI 行程 `day_type` 選項中暫時不顯示 `specific_date`」；schema 升級獨立成後續 phase（待確認編號），追蹤於 `已知問題.md`。
 - **既有行程 inline 編輯**：1-G-5 行程修改 = 刪除 + 重新新增。
 
@@ -2035,7 +2036,7 @@ per-character keyed pattern 仰賴 `character_id` 在 expander 生命週期內�
 
 失敗時顯示 `st.error(...)`，不寫入 `st.session_state["characters"]`。此即時擋與 UIW Linter 的 character_id 驗證重疊；UI 層只是把 fail-fast 提前。
 
-編輯 expander 不開放修改 `character_id`：1-G-5 範圍內 `character_id` 一旦建立即不可變，UI 上以唯讀文字顯示於進階設定區。修改 NPC `character_id` 屬於 1-G-6 範圍。
+編輯 expander 不開放修改 `character_id`：1-G-5 範圍內 `character_id` 一旦建立即不可變，UI 上以唯讀文字顯示於進階設定區。修改 NPC `character_id` 屬於 1-G-7（NPC ID 中文化）範圍。
 
 ##### 刪除角色時清空相關 session state
 
@@ -2223,6 +2224,291 @@ endings:
 - `forbidden_flags`: 若這些旗標成立，則此結局不可達成。例如已分手、角色死亡、重大背叛。表達式格式同 `required_flags`。
 - `priority`: 驗證優先權。`critical` 代表 Route Validator 應優先測試。
 - `route_tags`: 路線標籤，用於 Critical Path Mode、Flowchart 篩選與報告分類。
+
+### 5.4 Phase 1-G-6 UI 操作回饋規格
+
+Phase 1-G-6 是使用者實際操作 Interactive UIW 旗標/狀態/結局合併頁後的操作體驗調整。此階段不改變 Setup Package canonical schema，重點是拆分分頁、補完結局頁的 inline 編輯與中文化，並驗收「不設旗標 / 狀態時仍可匯出可用 Setup Package MD」這個目標。
+
+#### 範圍
+
+包含：
+
+- 拆分原「旗標 / 狀態 / 結局」分頁為「旗標與狀態(Flags & Status)」與「結局(Endings)」兩個獨立分頁。
+- 結局頁清單顯示與 inline expander 編輯。
+- 結局 `priority` 中文化與五級語意 caption。
+- `target_character_id` selectbox 中文顯示。
+- `required_flags` / `forbidden_flags` F-γ multiselect 快速加入互動。
+- 最小可用 Setup Package（flags=[] / status_flags=[]）匯出驗收。
+- 附帶修正 1-G-5 character_id 即時擋為跨類型唯一。
+
+排除：
+
+- **NPC 角色 ID 中文化（B 群組）**：原排 1-G-6，重排為 **1-G-7**。
+- **旗標 / 狀態頁 inline 編輯**：1-G-6 內僅分頁搬移，inline 編輯與中文化排 **1-G-8**。
+- **schedule `specific_date` schema 升級（D2）**：重排為 **1-G-9**。
+- **`required_stats` 改 multiselect**：1-G-6 內維持 free-form，不動。
+
+#### 分頁順序
+
+`PAGE_LABELS` 更新為：
+
+```python
+PAGE_LABELS = [
+    "世界觀與曆法(World)",
+    "主角設定(Protagonist)",
+    "地點與地圖(Locations)",
+    "角色設定(Characters)",
+    "旗標與狀態(Flags & Status)",
+    "結局(Endings)",
+    "預覽與匯出(Review & Export)",
+]
+```
+
+`_tab_flags()` 拆成 `_tab_flags()` 與 `_tab_endings()`。旗標與狀態旗標保留在前者（1-G-6 內 UX 不動），結局搬到後者並進行 inline 編輯改造。
+
+#### 結局清單顯示
+
+每個結局以 `st.expander` 呈現：
+
+```text
+{title or ending_id} · {priority 中文} · {target 顯示}
+```
+
+- title 為空時 fallback 顯示 `ending_id`。
+- priority 中文（精簡，不含括弧英文）：必定觸發 / 主線 / 路線 / 一般 / 背景。
+- target 顯示：
+  - `target_character_id is None` → `（無）`
+  - `"global"` → `全局結局`
+  - 命中既有角色 → 該角色 `display_name`（中文）
+  - dangling reference（僅限歷史 / 外部匯入資料；正常 UI 刪除角色時會被 ending 引用防呆阻擋）→ 原 ID 並加註「(角色已刪除)」
+
+每列右側直接顯示「刪除」按鈕，版面對齊 1-G-5 角色頁 / 1-G-4 地點頁 `st.columns([5, 1])` pattern。
+
+#### 結局刪除
+
+ending 沒被任何 setup package 欄位 reference，刪除不需引用防呆 toast：
+
+1. `st.session_state["endings"].pop(i)`。
+2. `_purge_ending_state(ending_id)`。
+3. `st.rerun()`。
+
+#### 既有結局 inline 編輯
+
+採與 1-G-5 角色頁相同的 inline expander 編輯範式：
+
+```text
+[基本資訊]   (form 內)
+  結局 ID (ending_id, 唯讀)
+  結局標題 (title)
+  結局類型 (ending_type)
+  關聯角色 (target_character_id, 中文 selectbox)
+  結局描述 (description)
+  優先權 (priority, 中文化 selectbox + caption)
+  路線標籤 (route_tags, free-form)
+
+[條件]
+  ── 必須條件 (required_flags) ──
+  [form 外] multiselect: 從現有旗標快速選
+  [form 外] [加入到必須條件] button → 展開 placeholder append 到下方
+  [form 內] required_flags free-form text_area
+            預填 keyed temp_req_flags_<ending_id>
+
+  ── 禁止條件 (forbidden_flags) ──
+  [form 外] multiselect + [加入到禁止條件] button
+  [form 內] forbidden_flags free-form text_area
+            預填 keyed temp_forb_flags_<ending_id>
+
+  ── 必須數值 (required_stats) ──
+  [form 內] required_stats free-form text_input
+            (1-G-6 不動，保持 free-form)
+
+[儲存修改]   [取消]
+```
+
+「加入到必須條件 / 加入到禁止條件」按鈕為 `st.button()`，必須位於 form 外，與 multiselect 同層；儲存 / 取消按鈕為 `st.form_submit_button()`，位於 form 內。
+
+##### F-γ multiselect 互動規則
+
+「加入」button 觸發後：
+
+1. 讀取 multiselect 選中的 `flag_id` 清單。
+2. 對每個 flag 產生 placeholder：
+   - `boolean` flag → `flag.<id> == true` / `flag.<id> == false`
+   - `integer` flag → `flag.<id> == <initial_value>`（不加引號）
+   - `string` / `enum` flag → `flag.<id> == "<initial_value>"`（使用雙引號；值內若已有 `"` 或 `\`，需 escape）
+3. append 到 `temp_req_flags_<ending_id>` / `temp_forb_flags_<ending_id>`，並更新 form 內 text_area 顯示。
+4. 清空 multiselect 選擇。
+
+multiselect 與 free-form text_area 為「單向 append」關係：取消勾選**不會**自動移除已加入的字串。修改條件值（true → false / 數值變動）必須直接編輯 text_area。
+
+flags=[] 時 multiselect 空，下方 caption 顯示「尚未設定旗標。可在『旗標與狀態』分頁建立後再回此處快速加入」。此狀況下使用者仍可：
+
+- 留 `required_flags` / `forbidden_flags` 為空 → 匯出 Setup Package（最小可用目標）。
+- `required_stats` 仍可在下方 free-form text_input 輸入 `stat.*` 條件；`required_flags` / `forbidden_flags` 只放 `flag.*` 條件。
+
+#### Priority 中文化映射
+
+selectbox 採「中文(英文)」混顯：
+
+```text
+priority:
+  critical -> 必定觸發(critical)
+  main     -> 主線(main)
+  route    -> 路線(route)
+  normal   -> 一般(normal)
+  ambient  -> 背景(ambient)
+```
+
+selectbox 下方常駐 caption（依正式規格 v1.2 §5 排序）：
+
+```text
+優先權由高到低：
+  critical: 強制觸發，覆蓋其他所有結局
+  main:     主線結局
+  route:    角色路線結局
+  normal:   一般結局
+  ambient:  背景/支線結局，最低優先
+```
+
+canonical 仍保存英文 enum：
+
+```yaml
+endings:
+  - ending_id: sophie_good_end
+    priority: route
+```
+
+#### `target_character_id` 中文 selectbox
+
+```python
+options = [None, "global"] + [ch["character_id"] for ch in st.session_state["characters"]]
+# 若目前 ending.target_character_id 是 dangling reference，額外 append 該原 ID，
+# 只為了讓歷史 / 外部匯入資料可顯示並保留；正常 UI 刪除角色時應被引用防呆阻擋。
+
+format_func:
+  None         -> 「（無 / 不指定）」
+  "global"     -> 「全局結局 (global)」
+  <character_id> -> 該角色 display_name（中文）
+                   ※ dangling reference（歷史 / 外部匯入資料）時顯示原 ID 並加註「(角色已刪除)」
+```
+
+底層 value 仍存 `character_id` / `"global"` / `None`。
+
+#### `ending_id` 唯一性與生命週期
+
+新增結局時必須擋下：
+
+- `ending_id` 為空字串。
+- `ending_id` 與既有 **world_id / character_id / location_id / flag_id / status_id / ending_id** 任一重複（**跨類型唯一**；1-G-6 UI 即時擋納入 `status_id`，linter 的 `status_id` 補洞另排後續 phase）。
+- `ending_id` 不符 canonical ID 格式（小寫英數底線）。
+
+失敗時顯示 `st.error(...)`，不寫入 `st.session_state["endings"]`。
+
+實作 helper：
+
+```python
+def _collect_existing_ids() -> set[str]:
+    s: set[str] = set()
+    world = st.session_state.get("world") or {}
+    if world.get("world_id"):
+        s.add(world["world_id"])
+    s.update(c["character_id"] for c in st.session_state.get("characters", []) if c.get("character_id"))
+    s.update(l["location_id"] for l in st.session_state.get("locations", []) if l.get("location_id"))
+    s.update(f["flag_id"] for f in st.session_state.get("flags", []) if f.get("flag_id"))
+    s.update(sf["status_id"] for sf in st.session_state.get("status_flags", []) if sf.get("status_id"))
+    s.update(e["ending_id"] for e in st.session_state.get("endings", []) if e.get("ending_id"))
+    return s
+```
+
+編輯 expander 內 `ending_id` 唯讀。
+
+#### 附帶修正：1-G-5 character_id 即時擋擴為跨類型唯一
+
+1-G-5 規格「新增角色 character_id 與既有 character_id 重複時擋下」**未涵蓋跨類型重複**（例 character_id `"sophie"` 與 location_id `"sophie"` 衝突）。雖然 UIW Linter export 時會擋為 `duplicate_id` error 作為最終防線，但 UI 層即時擋與 linter 行為不一致。
+
+1-G-6 順帶修正：1-G-5 角色頁的「新增角色」流程改用 `_collect_existing_ids` helper，擋下 character_id 與**任何類型**既有 ID 重複，包含既有 `status_id`。其他 1-G-5 規格不變。
+
+#### Streamlit 實作限制
+
+對齊 1-G-5 已建立的 Streamlit pattern：
+
+- **禁止 nested `st.expander`**：結局編輯 expander 內結構平鋪，無 nested expander。
+- **per-ending keyed pattern**：所有編輯 widget 必須使用顯式 key，後綴為該結局 `ending_id`。
+- **多結局並行編輯**：因 widget key 帶 `ending_id` 後綴，state 不互相污染。
+- **刪除清空 state**：`_purge_ending_state(ending_id)` 清掉所有 `*_<ending_id>` keyed session state。
+
+完整 keyed widget 清單：
+
+```text
+基本資訊：
+  edit_title_<ending_id>
+  edit_ending_type_<ending_id>
+  edit_target_<ending_id>
+  edit_description_<ending_id>
+  edit_priority_<ending_id>
+  edit_route_tags_<ending_id>
+
+條件：
+  ms_req_flags_<ending_id>
+  add_req_flags_<ending_id>
+  edit_req_flags_<ending_id>
+  ms_forb_flags_<ending_id>
+  add_forb_flags_<ending_id>
+  edit_forb_flags_<ending_id>
+  edit_req_stats_<ending_id>
+
+按鈕：
+  del_end_<ending_id>
+  save_end_<ending_id>
+  cancel_end_<ending_id>
+
+Form-外暫存 state：
+  temp_req_flags_<ending_id>
+  temp_forb_flags_<ending_id>
+```
+
+#### 「儲存修改」與「取消」行為
+
+對齊 1-G-5：
+
+- 編輯期間僅修改 keyed temp state 與 form 內 widget value，不立即寫回 canonical。
+- 「儲存修改」→ keyed temp state 與 form 內欄位合併寫回該 ending：
+  - `required_flags` 從 form 內 free-form text_area 解析（逗號分隔字串 → list[str]）為最終結果。`temp_req_flags_<ending_id>` 僅用於 multiselect 「加入」期間的暫存，不直接覆寫 ending。
+  - `forbidden_flags` 同理。
+  - `required_stats` 從 form 內 free-form text_input 解析。
+- 「取消」→ 清空 `temp_req_flags_<ending_id>` / `temp_forb_flags_<ending_id>`；下次開啟 expander 重新依當前 ending 值初始化。
+
+#### 不變項
+
+- canonical schema 完全不動：`Ending`、`FlagDef`、`StatusFlag`、`SetupPackage` 模型維持現狀。
+- exporter / parser 不需修改。
+- UIW Linter 規則不需新增（跨類型 ID 唯一檢查已存在於 `_check_ids`）。
+- 1-G-3 / 1-G-4 / 1-G-5 既有行為全部保留。
+- 主角頁、地點頁、角色頁、世界頁 1-G-6 不動。
+- 旗標 / 狀態頁 1-G-6 內僅分頁搬移，UX 內容原樣。
+
+#### 最小可用 Setup Package 驗收
+
+定義「最小可用」Setup Package：
+
+```text
+最小可用條件：
+  - World 必填欄位齊全
+  - Protagonist 必填欄位齊全
+  - locations 至少 1 筆（其中至少 1 筆 is_visitable=True）
+  - characters 至少 1 筆
+  - endings 至少 1 筆
+  - flags = []
+  - status_flags = []
+
+預期結果：
+  - UIW Linter 不報 error（warnings 可接受）
+  - SetupPackageExporter.to_markdown() 成功產生 MD
+  - MD 可被 parser 還原為 SetupPackage
+  - 該 ending 的 required_flags / forbidden_flags / required_stats 全為空
+```
+
+對應測試補在 `tests/test_exporter.py` 或 `tests/test_uiw_linter.py`，並提供手動驗收流程（見 `測試指南.md`）。
 
 ---
 
