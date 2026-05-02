@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.15 | 2026-05-03 | 補強 Phase 1-G-7 規格：全域 ID 集合補入固定 `protagonist`；明示「自動 ID 路徑因 prefix 隔離不會跨類衝突，跨類唯一只在進階手動 ID／模板套用／匯入既有資料時觸發」；模板衝突挑邊為「自動 suffix 避讓」；預覽 ID 時機定為「submit 後 caption」；suffix 連鎖規則為「順序遞增取最小未占用」。 |
 | v1.2.14 | 2026-05-03 | 修正 Phase 1-G-7 規格：結局範例 ID 改為純拼音 `end_su_fei_hao_jie_ju`；旗標 ID 來源欄位改為 `description`；補 description slug 截斷、標點處理、`unnamed` fallback 與 `_make_unique_id` 包裝既有 `_generate_system_id` 的限制。 |
 | v1.2.13 | 2026-05-03 | 新增 Phase 1-G-7 規格：地點 / NPC / 旗標 / 狀態 / 結局新增流程不再要求使用者輸入英文 ID，改由 UI 依中文名稱、標題、description 或 label 自動產生唯一 canonical ID；既有 ID rename / 引用搬移不納入本 phase。 |
 | v1.2.12 | 2026-05-01 | 新增 Phase 1-G-6 規格：拆分旗標/狀態與結局為兩個分頁、結局頁 inline expander 編輯、priority 中文化 + 五級語意 caption、`target_character_id` 中文 selectbox、`required_flags` / `forbidden_flags` F-γ multiselect 快速加入、最小可用 Setup Package 匯出驗收；附帶修正 1-G-5 character_id 即時擋為跨類型唯一（UI 層含 `status_id`）。 |
@@ -2566,7 +2567,7 @@ ID 產生規則：
 5. 將 slug 依 `_` 切成 token，最多保留前 8 個 token，避免 description 產生過長 ID；截斷後再次合併重複 `_` 並去掉頭尾 `_`。
 6. 若結果空白，使用不含 prefix 的中性 fallback `unnamed`。
 7. 加上類型 prefix。
-8. 若與既有全域 ID 衝突，依序追加 `_2`、`_3`、`_4`，直到唯一。
+8. 若與既有全域 ID 衝突，依序追加 `_2`、`_3`、`_4`，直到唯一；suffix 必須**順序遞增取最小未占用**（既有 `_2`、`_4` 時新增者為 `_3`）。
 
 prefix 建議：
 
@@ -2588,12 +2589,33 @@ prefix 建議：
 
 ```text
 world.world_id
+固定 protagonist_id（即字面 "protagonist"）
 characters[].character_id
 locations[].location_id
 flags[].flag_id
 status_flags[].status_id
 endings[].ending_id
 ```
+
+`protagonist` 為固定 ID 不在 `characters[]` 內，但仍須納入全域集合，以擋進階手動 ID 入口的衝突。目前 UI 層 `_collect_existing_ids` 已含 `status_id`，**尚未含 `protagonist`，1-G-7 須補**。
+
+#### 跨類唯一性的觸發場景
+
+自動 ID 路徑下，prefix 隔離使各類型永不可能跨類衝突。跨類衝突僅在以下情境發生：
+
+1. **進階手動 ID 入口**：使用者繞過自動產生路徑自行輸入完整 ID。
+2. **地點模板套用**：1-G-4 既有「沿用模板建議 ID」流程，若模板帶來的 ID 與其他類型既有 ID 撞。
+3. **既有匯入 / 手寫 Setup Package**：外部資料的 ID 不一定遵循 prefix 慣例。
+
+#### 模板套用衝突處理
+
+地點模板套用時，模板建議 ID 必須經過 `_make_unique_id` 全域唯一性檢查。本期挑邊為「**自動 suffix 避讓**」（模板 ID `loc_home`、已存在則建立 `loc_home_2`），不採「阻止新增 + toast」，因為地點模板天生需要重複套用。
+
+#### 預覽 ID 顯示時機
+
+採「**submit 後在新增結果以 caption 顯示自動產生的系統 ID**」，不在 form 內 widget callback 即時預覽，以免 token 截斷與衝突 suffix 在使用者輸入過程中頻繁變動。自動 ID 預覽不允許做成 form 內必填或可編輯欄位。
+
+#### 實作建議
 
 實作時應新增 `_make_unique_id(label, prefix, fallback, existing_ids)` 這類包裝 helper，內部呼叫既有 `_generate_system_id(label)` 取得 base slug，再負責截斷、prefix 與唯一性 suffix。不得修改 `_generate_system_id` 的簽章與既有行為，因為 1-G-3 semantic choice 仍依賴它產生不帶類型 prefix 的系統 ID。
 
