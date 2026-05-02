@@ -4,9 +4,11 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.14 | 2026-05-03 | 修正 Phase 1-G-7 規格：結局範例 ID 改為純拼音 `end_su_fei_hao_jie_ju`；旗標 ID 來源欄位改為 `description`；補 description slug 截斷、標點處理、`unnamed` fallback 與 `_make_unique_id` 包裝既有 `_generate_system_id` 的限制。 |
+| v1.2.13 | 2026-05-03 | 新增 Phase 1-G-7 規格：地點 / NPC / 旗標 / 狀態 / 結局新增流程不再要求使用者輸入英文 ID，改由 UI 依中文名稱、標題、description 或 label 自動產生唯一 canonical ID；既有 ID rename / 引用搬移不納入本 phase。 |
 | v1.2.12 | 2026-05-01 | 新增 Phase 1-G-6 規格：拆分旗標/狀態與結局為兩個分頁、結局頁 inline expander 編輯、priority 中文化 + 五級語意 caption、`target_character_id` 中文 selectbox、`required_flags` / `forbidden_flags` F-γ multiselect 快速加入、最小可用 Setup Package 匯出驗收；附帶修正 1-G-5 character_id 即時擋為跨類型唯一（UI 層含 `status_id`）。 |
 | v1.2.11 | 2026-05-01 | 補強 Phase 1-G-5 Streamlit 實作限制：禁止 nested `st.expander`、所有編輯 widget 採 per-character keyed pattern、新增角色擋空/重複/非法 `character_id` 並禁止編輯期修改 `character_id`、刪除角色後清空相關 session state。 |
-| v1.2.10 | 2026-05-01 | 補充 Phase 1-G-5 角色設定頁面 UX 完整化：角色清單顯示與刪除引用防呆、inline expander 編輯、行程清單與新增搬入編輯區、行程 enum 中文化、白名單顯示與進階設定收納；明確排除 NPC ID 中文化（現排 1-G-7）與 schedule `specific_date` schema 升級（待後續 phase）。 |
+| v1.2.10 | 2026-05-01 | 補充 Phase 1-G-5 角色設定頁面 UX 完整化：角色清單顯示與刪除引用防呆、inline expander 編輯、行程清單與新增搬入編輯區、行程 enum 中文化、白名單顯示與進階設定收納；明確排除新增流程自動產生 ID（現排 1-G-7）與 schedule `specific_date` schema 升級（待後續 phase）。 |
 | v1.2.9 | 2026-05-01 | 修正 Phase 1-G-4 地點模板規格：明確子地點 ID 由父地點 ID 與 suffix 組成、保留既有 standalone 模板，並區分同名便利商店模板顯示。 |
 | v1.2.8 | 2026-05-01 | 補充 Phase 1-G-4 地點與地圖調整：地點頁順序提前、擴充模板、刪除引用防呆、中文化地點類型與可使用時段，並將 tags 定義為 AI 劇情參考用進階設定。 |
 | v1.2.7 | 2026-05-01 | 補充 Phase 1-G-3 完成後規則：`none = 沒有秘密` 僅為 UI 清空操作，canonical data 以 `secrets: []` 表示沒有秘密；記錄 1-G-3 實作完成項目。 |
@@ -1808,7 +1810,7 @@ Phase 1-G-5 是使用者實際操作 Interactive UIW 角色設定頁後的操作
 
 排除：
 
-- **NPC 角色 ID 中文化（B 群組）**：NPC `character_id` 於 1-G-5 仍由使用者輸入英文，並於編輯 expander 進階設定中以唯讀文字顯示。Phase 1-G-7 將比照 1-G-3「中文 label → 工具產 canonical ID」處理 NPC ID 輸入體驗。
+- **新增流程自動產生唯一 canonical ID（B 群組）**：地點、NPC 角色、旗標、狀態與結局目前仍要求使用者輸入英文 ID。Phase 1-G-7 將比照 1-G-3「中文 label → 工具產 canonical ID」原則，把這些新增流程改為自動產生唯一系統 ID。
 - **`day_type = specific_date` schema 補日期欄位（D2）**：1-G-5 的處理方式為「在 UI 行程 `day_type` 選項中暫時不顯示 `specific_date`」；schema 升級獨立成後續 phase（待確認編號），追蹤於 `已知問題.md`。
 - **既有行程 inline 編輯**：1-G-5 行程修改 = 刪除 + 重新新增。
 
@@ -2036,7 +2038,7 @@ per-character keyed pattern 仰賴 `character_id` 在 expander 生命週期內�
 
 失敗時顯示 `st.error(...)`，不寫入 `st.session_state["characters"]`。此即時擋與 UIW Linter 的 character_id 驗證重疊；UI 層只是把 fail-fast 提前。
 
-編輯 expander 不開放修改 `character_id`：1-G-5 範圍內 `character_id` 一旦建立即不可變，UI 上以唯讀文字顯示於進階設定區。修改 NPC `character_id` 屬於 1-G-7（NPC ID 中文化）範圍。
+編輯 expander 不開放修改 `character_id`：1-G-5 範圍內 `character_id` 一旦建立即不可變，UI 上以唯讀文字顯示於進階設定區。Phase 1-G-7 僅處理新增角色時自動產生 `character_id`；既有 NPC `character_id` 修改屬 ID rename / reference migration，不納入 1-G-7。
 
 ##### 刪除角色時清空相關 session state
 
@@ -2243,7 +2245,7 @@ Phase 1-G-6 是使用者實際操作 Interactive UIW 旗標/狀態/結局合併�
 
 排除：
 
-- **NPC 角色 ID 中文化（B 群組）**：原排 1-G-6，重排為 **1-G-7**。
+- **新增流程自動產生唯一 canonical ID（B 群組）**：原排 1-G-6 的 B 群組擴大為 **1-G-7**，涵蓋地點、NPC 角色、旗標、狀態與結局新增流程。
 - **旗標 / 狀態頁 inline 編輯**：1-G-6 內僅分頁搬移，inline 編輯與中文化排 **1-G-8**。
 - **schedule `specific_date` schema 升級（D2）**：重排為 **1-G-9**。
 - **`required_stats` 改 multiselect**：1-G-6 內維持 free-form，不動。
@@ -2509,6 +2511,98 @@ Form-外暫存 state：
 ```
 
 對應測試補在 `tests/test_exporter.py` 或 `tests/test_uiw_linter.py`，並提供手動驗收流程（見 `測試指南.md`）。
+
+---
+
+### 5.5 Phase 1-G-7 UI 操作回饋規格
+
+Phase 1-G-7 是使用者確認 ID 輸入負擔後的操作體驗調整。除主角固定 `protagonist` 以外，地點、NPC 角色、旗標、狀態與結局的英文 ID 都是系統引用鍵，不應要求一般使用者手動輸入。UI 應依中文名稱、標題或 label 自動產生唯一 canonical ID。
+
+#### 範圍
+
+包含：
+
+- 手動新增地點：`location_id`
+- 新增 NPC 角色：`character_id`
+- 新增旗標：`flag_id`
+- 新增狀態旗標：`status_id`
+- 新增結局：`ending_id`
+
+排除：
+
+- `world_id`：仍由 World 頁處理。
+- `protagonist_id`：固定為 `protagonist`。
+- 既有資料 ID rename 與引用搬移。
+- schema / exporter / parser 資料契約修改。
+
+#### UI 原則
+
+新增表單以使用者可理解欄位為主，英文 ID 欄位不再是必填主欄位：
+
+```text
+地點：地點名稱
+NPC：角色姓名 / 顯示名
+旗標：用途描述
+狀態：狀態名稱
+結局：結局標題
+```
+
+UI 可在進階設定或 caption 顯示自動產生的系統 ID：
+
+```text
+系統 ID：ch_lin_xiao_yu
+```
+
+若提供手動調整 ID 的入口，必須放在進階設定中，並套用 canonical ID 格式檢查與全域唯一檢查。驗證失敗時不新增資料、不清空使用者已輸入內容。
+
+#### ID 產生與唯一性
+
+ID 產生規則：
+
+1. 取中文名稱 / 標題 / label 作為來源；旗標因 canonical schema 沒有 `label` 欄位，使用 `description` 作為來源。
+2. 中文轉拼音；英文轉小寫；空白與標點（包含中文標點如 `、`、`，`、`。`、`：`）轉 `_`。
+3. 移除不符合 canonical ID 的字元。
+4. 合併重複 `_`，去掉頭尾 `_`。
+5. 將 slug 依 `_` 切成 token，最多保留前 8 個 token，避免 description 產生過長 ID；截斷後再次合併重複 `_` 並去掉頭尾 `_`。
+6. 若結果空白，使用不含 prefix 的中性 fallback `unnamed`。
+7. 加上類型 prefix。
+8. 若與既有全域 ID 衝突，依序追加 `_2`、`_3`、`_4`，直到唯一。
+
+prefix 建議：
+
+| 類型 | prefix | 範例 |
+| :--- | :--- | :--- |
+| 地點 | `loc_` | `loc_ka_fei_ting` |
+| NPC 角色 | `ch_` | `ch_lin_xiao_yu` |
+| 旗標 | `flag_` | `flag_shi_fou_shi_ye` |
+| 狀態旗標 | `status_` | `status_guo_lao` |
+| 結局 | `end_` | `end_su_fei_hao_jie_ju` |
+
+產出 ID 必須符合：
+
+```text
+^[a-z][a-z0-9_]*$
+```
+
+唯一性檢查必須使用同一個全域 ID 集合：
+
+```text
+world.world_id
+characters[].character_id
+locations[].location_id
+flags[].flag_id
+status_flags[].status_id
+endings[].ending_id
+```
+
+實作時應新增 `_make_unique_id(label, prefix, fallback, existing_ids)` 這類包裝 helper，內部呼叫既有 `_generate_system_id(label)` 取得 base slug，再負責截斷、prefix 與唯一性 suffix。不得修改 `_generate_system_id` 的簽章與既有行為，因為 1-G-3 semantic choice 仍依賴它產生不帶類型 prefix 的系統 ID。
+
+#### 不變項
+
+- canonical data 仍保存英文 ID。
+- UI 顯示中文名稱、標題與 label；底層引用仍使用英文 ID。
+- 新增後，地點 parent、角色 schedule、結局 target、status target 等引用欄位底層 value 不變。
+- 不處理既有 ID rename，因此不需要搬移 reference 或 session state key。
 
 ---
 
