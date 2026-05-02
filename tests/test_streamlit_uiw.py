@@ -64,7 +64,8 @@ def test_add_character_validation(mock_st):
         "characters": [{"character_id": "exist_id", "display_name": "Dummy", "gender": "male", "role": "main_love_interest", "personality_tags": [], "secrets": [], "schedule": []}],
         "locations": [{"location_id": "home", "name": "Home", "location_type": "sub_location", "parent_location_id": "building", "is_visitable": True}],
         "temp_ch_tags": [],
-        "temp_ch_secrets": []
+        "temp_ch_secrets": [],
+        "add_ch_name": "Draft Char Name"
     }
 
     # 模擬按下新增按鈕
@@ -79,6 +80,7 @@ def test_add_character_validation(mock_st):
 
     _tab_characters()
     mock_st.error.assert_any_call("角色 ID 不可為空")
+    assert "add_ch_name" in mock_st.session_state
 
     # 模擬輸入：重複 ID
     def mock_text_input_exist(label, *args, **kwargs):
@@ -89,6 +91,7 @@ def test_add_character_validation(mock_st):
 
     _tab_characters()
     mock_st.error.assert_any_call("角色 ID 已存在 (與既有 ID 衝突)")
+    assert "add_ch_name" in mock_st.session_state
 
     # 模擬輸入：非法 ID
     def mock_text_input_invalid(label, *args, **kwargs):
@@ -99,6 +102,7 @@ def test_add_character_validation(mock_st):
 
     _tab_characters()
     mock_st.error.assert_any_call("角色 ID 格式錯誤 (須為小寫英文、數字、底線，且以英文字母開頭)")
+    assert "add_ch_name" in mock_st.session_state
 
 
 # ─── Endings Tests ──────────────────────────────────────────────────────────
@@ -150,12 +154,14 @@ def test_add_ending_validation_empty_id(mock_st):
     mock_st.form_submit_button.return_value = True
     state = dict(_BASE_FLAGS_SESSION)
     state["endings"] = []
+    state["add_end_title"] = "Draft Ending"
     mock_st.session_state = state
 
     _tab_endings()
 
     mock_st.error.assert_any_call("Ending ID 不可為空")
     assert state["endings"] == []
+    assert "add_end_title" in mock_st.session_state
 
 
 @patch("sandbox_dating_sim.ui.streamlit_uiw.st")
@@ -173,6 +179,7 @@ def test_add_ending_validation_duplicate_id(mock_st):
 
     state = dict(_BASE_FLAGS_SESSION)
     state["endings"] = []
+    state["add_end_title"] = "Draft Ending"
     mock_st.session_state = state
 
     _tab_endings()
@@ -181,6 +188,7 @@ def test_add_ending_validation_duplicate_id(mock_st):
     error_calls = [str(call) for call in mock_st.error.call_args_list]
     assert any("Ending ID 已存在" in c for c in error_calls)
     assert state["endings"] == []
+    assert "add_end_title" in mock_st.session_state
 
 @patch("sandbox_dating_sim.ui.streamlit_uiw.st")
 def test_tab_endings_multiselect_versioning(mock_st):
@@ -250,3 +258,48 @@ def test_tab_endings_priority_caption(mock_st):
     caption_calls = [str(call) for call in mock_st.caption.call_args_list]
     # 檢查是否有印出包含 "優先權由高到低" 的 caption
     assert any("優先權由高到低" in call for call in caption_calls)
+
+
+from sandbox_dating_sim.ui.streamlit_uiw import _tab_locations
+
+@patch("sandbox_dating_sim.ui.streamlit_uiw.st")
+def test_add_location_validation(mock_st):
+    """測試新增地點的 ID 驗證（包括大寫、重複等）。"""
+    mock_st.columns.side_effect = lambda x, **kwargs: [MagicMock() for _ in range(len(x))] if isinstance(x, list) else [MagicMock() for _ in range(x)]
+    mock_st.button.return_value = False
+
+    mock_st.session_state = {
+        "world_id": "my_game",
+        "locations": [{"location_id": "exist_id", "name": "Dummy", "location_type": "standalone", "is_visitable": True}],
+        "characters": [],
+        "flags": [],
+        "status_flags": [],
+        "endings": [],
+        "add_loc_name": "Draft Location"
+    }
+
+    mock_st.form_submit_button.return_value = True
+
+    # 模擬輸入：大寫 ID
+    def mock_text_input_upper(label, *args, **kwargs):
+        if label == "地點 ID (英文)":
+            return "School"
+        return ""
+    mock_st.text_input.side_effect = mock_text_input_upper
+
+    _tab_locations()
+    error_calls = [str(call) for call in mock_st.error.call_args_list]
+    assert any("地點 ID 格式錯誤" in call for call in error_calls)
+    assert "add_loc_name" in mock_st.session_state
+
+    # 模擬輸入：重複 ID
+    def mock_text_input_exist(label, *args, **kwargs):
+        if label == "地點 ID (英文)":
+            return "exist_id"
+        return ""
+    mock_st.text_input.side_effect = mock_text_input_exist
+
+    _tab_locations()
+    error_calls = [str(call) for call in mock_st.error.call_args_list]
+    assert any("地點 ID 已存在" in call for call in error_calls)
+    assert "add_loc_name" in mock_st.session_state
