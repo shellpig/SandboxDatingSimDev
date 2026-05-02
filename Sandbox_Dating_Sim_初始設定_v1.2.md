@@ -4,6 +4,8 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.11 | 2026-05-01 | 補強 Phase 1-G-5 Streamlit 實作限制：禁止 nested `st.expander`、所有編輯 widget 採 per-character keyed pattern、新增角色擋空/重複/非法 `character_id` 並禁止編輯期修改 `character_id`、刪除角色後清空相關 session state。 |
+| v1.2.10 | 2026-05-01 | 補充 Phase 1-G-5 角色設定頁面 UX 完整化：角色清單顯示與刪除引用防呆、inline expander 編輯、行程清單與新增搬入編輯區、行程 enum 中文化、白名單顯示與進階設定收納；明確排除 NPC ID 中文化（1-G-6）與 schedule `specific_date` schema 升級（待後續 phase）。 |
 | v1.2.9 | 2026-05-01 | 修正 Phase 1-G-4 地點模板規格：明確子地點 ID 由父地點 ID 與 suffix 組成、保留既有 standalone 模板，並區分同名便利商店模板顯示。 |
 | v1.2.8 | 2026-05-01 | 補充 Phase 1-G-4 地點與地圖調整：地點頁順序提前、擴充模板、刪除引用防呆、中文化地點類型與可使用時段，並將 tags 定義為 AI 劇情參考用進階設定。 |
 | v1.2.7 | 2026-05-01 | 補充 Phase 1-G-3 完成後規則：`none = 沒有秘密` 僅為 UI 清空操作，canonical data 以 `secrets: []` 表示沒有秘密；記錄 1-G-3 實作完成項目。 |
@@ -1789,6 +1791,284 @@ emotion_aliases:
   暈船: love_struck
   上頭: love_struck
 ```
+
+### 4.6 Phase 1-G-5 UI 操作回饋規格
+
+Phase 1-G-5 是使用者實際操作 Interactive UIW 角色設定頁後的操作體驗調整。此階段不改變 Setup Package canonical schema，重點是補完角色頁的清單可掃讀性、既有角色 inline 編輯、行程管理與中文化，並與 1-G-1 / 1-G-2 / 1-G-4 已建立的 UX 慣例對齊。
+
+#### 範圍
+
+包含：
+
+- 角色清單顯示與刪除引用防呆（A 群組）。
+- 既有角色 inline expander 編輯（A4）。
+- 行程清單顯示與刪除、行程新增搬入編輯區、行程 enum 中文化、行程地點選單中文化（C / D 群組）。
+- 受控素材白名單顯示精簡與進階設定收納（C2 / E 群組）。
+
+排除：
+
+- **NPC 角色 ID 中文化（B 群組）**：NPC `character_id` 於 1-G-5 仍由使用者輸入英文，並於編輯 expander 進階設定中以唯讀文字顯示。Phase 1-G-6 將比照 1-G-3「中文 label → 工具產 canonical ID」處理 NPC ID 輸入體驗。
+- **`day_type = specific_date` schema 補日期欄位（D2）**：1-G-5 的處理方式為「在 UI 行程 `day_type` 選項中暫時不顯示 `specific_date`」；schema 升級獨立成後續 phase（待確認編號），追蹤於 `已知問題.md`。
+- **既有行程 inline 編輯**：1-G-5 行程修改 = 刪除 + 重新新增。
+
+#### 角色清單顯示
+
+每個角色以 `st.expander` 呈現，expander label 顯示：
+
+```text
+{display_name} · {性別中文} · {定位中文}
+```
+
+- 性別中文沿用 1-G-2 `GENDER_OPTIONS` label。
+- 定位中文沿用 1-G-2 `ROLE_OPTIONS` label。
+- 不再於 expander label 顯示 `(character_id)`；系統 ID 於編輯 expander 內進階設定區以唯讀文字顯示。
+
+每個角色右側有獨立刪除按鈕，不需展開 expander 即可刪除，版面對齊 1-G-4 地點頁 `st.columns([5, 1])` pattern。
+
+#### 角色刪除引用防呆
+
+刪除角色前必須掃描下列引用：
+
+- `endings[].target_character_id` 命中該 `character_id` → 阻擋。
+- `status_flags[].target` 命中該 `character_id`（排除 `protagonist`、`global` 與空字串等特殊值）→ 阻擋。
+
+阻擋時以 `st.toast(..., icon="🚨")` 顯示，避免打亂角色清單排版。範例：
+
+```text
+無法刪除：被結局 sophie_good_end 引用
+無法刪除：被狀態旗標 sophie_route_lock 引用
+無法刪除：被結局 sophie_good_end、狀態旗標 sophie_route_lock 引用
+```
+
+僅在沒有任何引用時才允許刪除。
+
+#### 既有角色 inline 編輯
+
+採 inline expander 編輯範式，每個角色 expander 展開後即為完整編輯表單：
+
+```text
+[基本資訊]
+  顯示名稱 / 性別 / 性取向(多選) / 定位 / 身分描述 / 初始好感度
+
+[性格與秘密]   (form 外, keyed temp state)
+  性格標籤 (allow_multiple)
+  角色秘密 (最多 3 個, separate_none)
+
+[角色行程]
+  既有行程清單（每筆右側可刪除）
+  新增行程表單
+
+[進階設定 (Advanced Settings)]
+  💡 受控素材說明
+  表情白名單 / 服裝白名單 / 位置白名單
+  系統 ID（character_id，唯讀）
+
+[儲存修改]   [取消]
+```
+
+性格標籤、角色秘密的暫存 state 採 keyed pattern：
+
+```text
+temp_ch_tags_<character_id>
+temp_ch_secrets_<character_id>
+```
+
+行為：
+
+- 第一次 open expander 時若 key 不存在，使用該角色當前 `personality_tags` / `secrets` 初始化。
+- 編輯期間僅修改 keyed temp state，不立即寫回 canonical 資料。
+- 「儲存修改」將 keyed temp state 與 form 內欄位合併寫回該角色。
+- 「取消」清空 keyed temp state；下次開啟 expander 重新依當前值初始化。
+- 多角色同時編輯時不互相污染。
+
+新增角色仍維持頁面下方獨立「新增角色」表單，沿用 1-G-3 既有 `temp_ch_tags`、`temp_ch_secrets`（無後綴 key）。
+
+`character_id` 於編輯 expander 內以唯讀文字顯示於進階設定區，1-G-5 不開放修改。
+
+#### 行程清單顯示與刪除
+
+每個角色 expander 內「角色行程」區塊列出該角色 `schedule`，每筆顯示：
+
+```text
+{day_type 中文} {time_slot 中文} @ {地點 name} [{priority 中文}] order={schedule_order}
+```
+
+範例：
+
+```text
+平日 早上 @ 蘇菲家 [一般] order=20
+週末 下午 @ 中央公園 [路線] order=10
+```
+
+- 地點 name 由 `location_id` 反查 `st.session_state["locations"]` 對應 `name`。
+- 若該 `location_id` 已被刪除，顯示原 ID 並加註「(地點已刪除)」。
+- 每筆右側「刪除」按鈕，按下後從該角色 `schedule` 移除該筆。
+- 1-G-5 不提供行程 inline 編輯；修改 = 刪除 + 重新新增。
+
+#### 行程新增搬入編輯 expander
+
+「新增行程」表單從頁面下方共用區搬入每個角色編輯 expander 內「角色行程」區塊下方。
+
+- 不再透過 `selectbox` 選擇要綁定的角色，因為 expander 已限定該角色。
+- 表單欄位：行程 ID / 日期類型 / 時間段 / 地點 / 優先權 / 排序值 / 條件。
+- 顯示文字依下節中文化映射。
+- 頁面下方既有共用「新增角色行程」表單於 1-G-5 移除。
+
+#### 行程 enum 中文化映射
+
+行程 UI 採「中文(英文)」混顯，canonical 仍英文 enum：
+
+```text
+day_type:
+  weekday        -> 平日(weekday)
+  weekend        -> 週末(weekend)
+  holiday        -> 假日(holiday)
+  any            -> 任意(any)
+  specific_date  -> 1-G-5 暫不顯示於 UI 選項
+
+time_slot:
+  morning        -> 早上(morning)
+  afternoon      -> 下午(afternoon)
+  evening        -> 晚上(evening)
+
+priority:
+  critical       -> 必定(critical)
+  route          -> 路線(route)
+  normal         -> 一般(normal)
+  ambient        -> 環境(ambient)
+```
+
+輸出資料維持原本英文 enum：
+
+```yaml
+schedule:
+  - schedule_id: sophie_weekday_morning
+    day_type: weekday
+    time_slot: morning
+    location_id: school_class_2a
+    priority: normal
+    schedule_order: 20
+```
+
+`time_slot` 中文化已在 1-G-4 地點頁建立；行程頁與地點頁必須使用相同映射，避免不一致。
+
+#### 行程地點選單中文化
+
+行程「地點」`selectbox` 顯示地點 `name`，底層 value 仍是 `location_id`：
+
+- `selectbox` 使用 `format_func=lambda lid: location_name_map.get(lid, lid)`。
+- 對齊 1-G-3 中文 label / 英文 canonical 原則。
+
+#### 受控素材白名單顯示與進階設定收納
+
+表情、服裝、位置白名單收進編輯 expander 內「進階設定 (Advanced Settings)」展開區。
+
+- `multiselect` 顯示文字為純中文 label，移除目前 `"label (id)"` 的 `(id)` 後綴。
+- 底層仍保存 `[{"id": ..., "label": ...}, ...]`，與 1-G-3 一致。
+- 預設選擇邏輯：新增角色時可預填前 N 個常用 preset；既有角色編輯時依該角色當前值預填。
+
+進階設定區頂部加入常駐說明：
+
+```text
+💡 受控素材清單：表情、服裝、位置白名單用於限制 AI 生成劇情時可用的角色素材，
+避免 AI 任意創造。預設值可依角色定位調整。
+```
+
+#### Streamlit 實作限制
+
+下列限制是 1-G-5 實作層必須遵守的硬性條件，避開 Streamlit 的 widget key 與 expander 限制，並保證 keyed session state 後綴穩定：
+
+##### 禁止 nested `st.expander`
+
+Streamlit 不允許 `st.expander` 內再放 `st.expander`，會 raise `StreamlitAPIException`。「進階設定 (Advanced Settings)」展開區改用 `st.checkbox("顯示進階設定", key=f"show_adv_{character_id}")` 或 `st.toggle(...)` 切換，`True` 時於 `st.container` 內顯示白名單區塊。切換 state 必須帶 per-character key。
+
+##### 編輯 widget 全採 per-character keyed pattern
+
+編輯 expander 內所有 widget 必須使用顯式 key，後綴為該角色 `character_id`：
+
+```text
+基本資訊：
+  edit_display_name_<character_id>
+  edit_gender_<character_id>
+  edit_orientation_<character_id>
+  edit_role_<character_id>
+  edit_identity_<character_id>
+  edit_initial_favor_<character_id>
+
+進階設定（白名單）：
+  show_adv_<character_id>
+  edit_emotions_<character_id>
+  edit_costumes_<character_id>
+  edit_positions_<character_id>
+
+行程新增表單：
+  add_sch_id_<character_id>
+  add_sch_day_<character_id>
+  add_sch_slot_<character_id>
+  add_sch_loc_<character_id>
+  add_sch_prio_<character_id>
+  add_sch_order_<character_id>
+  add_sch_cond_<character_id>
+
+性格 / 秘密 keyed temp state：
+  temp_ch_tags_<character_id>
+  temp_ch_secrets_<character_id>
+
+按鈕：
+  del_ch_<character_id>
+  save_ch_<character_id>
+  cancel_ch_<character_id>
+  del_sch_<character_id>_<schedule_index>
+```
+
+頁面下方共用「新增角色」表單仍使用無後綴 key。
+
+##### `character_id` 唯一性與生命週期
+
+per-character keyed pattern 仰賴 `character_id` 在 expander 生命週期內唯一且不變。
+
+新增角色時必須擋下：
+
+- `character_id` 為空字串。
+- `character_id` 與 `st.session_state["characters"]` 中既有 `character_id` 重複。
+- `character_id` 不符 canonical ID 格式（小寫英數底線、不可中文、不可空格）。
+
+失敗時顯示 `st.error(...)`，不寫入 `st.session_state["characters"]`。此即時擋與 UIW Linter 的 character_id 驗證重疊；UI 層只是把 fail-fast 提前。
+
+編輯 expander 不開放修改 `character_id`：1-G-5 範圍內 `character_id` 一旦建立即不可變，UI 上以唯讀文字顯示於進階設定區。修改 NPC `character_id` 屬於 1-G-6 範圍。
+
+##### 刪除角色時清空相關 session state
+
+刪除角色（通過 endings / status_flags 引用防呆檢查後）必須清掉該角色所有 keyed session state：
+
+```python
+def _purge_character_state(character_id: str) -> None:
+    suffix = f"_{character_id}"
+    schedule_prefix = f"del_sch_{character_id}_"
+    keys_to_drop = [
+        k for k in list(st.session_state.keys())
+        if k.endswith(suffix) or k.startswith(schedule_prefix)
+    ]
+    for k in keys_to_drop:
+        del st.session_state[k]
+```
+
+刪除流程：
+
+1. 引用防呆檢查（endings / status_flags）。
+2. 通過 → `st.session_state["characters"].pop(i)`。
+3. `_purge_character_state(character_id)`。
+4. `st.rerun()`。
+
+防呆未通過 → 顯示 toast，不執行 2–4。
+
+#### 不變項
+
+- canonical schema 不動：`Character`、`ScheduleEntry`、`AssetOption`、`SemanticChoice` 維持現狀。
+- exporter / parser 不需修改。
+- UIW Linter 規則不需新增（A3 引用防呆是 UI 層即時阻擋，不是 export 時驗證；新增角色 character_id 即時擋是 UI 層 fail-fast，linter 仍保留 export 時驗證作為最終防線）。
+- 1-G-3 `id + label`、1-G-4 地點頁排版、1-G-2 中文化選項全部保留。
+- 主角頁、地點頁、旗標/結局頁不在此 phase 範圍。
 
 ---
 

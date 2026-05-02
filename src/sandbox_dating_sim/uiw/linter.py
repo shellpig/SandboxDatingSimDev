@@ -102,7 +102,7 @@ class UIWLinter:
 
     def _check_ids(self, package: SetupPackage) -> list[Issue]:
         issues = []
-        all_ids = set()
+        all_ids: dict[str, str] = {}
 
         def _check(id_val: str, path: str, context: str):
             if not is_valid_id(id_val):
@@ -113,14 +113,15 @@ class UIWLinter:
                     message=f"{context} ID 格式不合法：{id_val}。"
                 ))
             if id_val in all_ids:
+                prev_path = all_ids[id_val]
                 issues.append(Issue(
                     severity="error",
                     type="duplicate_id",
                     path=path,
-                    message=f"{context} ID 重複：{id_val}。"
+                    message=f"{context} ID 重複：{id_val}；已被 {prev_path} 使用。"
                 ))
             else:
-                all_ids.add(id_val)
+                all_ids[id_val] = path
 
         _check(package.world.world_id, "world.world_id", "World")
         for i, char in enumerate(package.characters):
