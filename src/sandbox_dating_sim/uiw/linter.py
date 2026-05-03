@@ -126,6 +126,8 @@ class UIWLinter:
         _check(package.world.world_id, "world.world_id", "World")
         for i, char in enumerate(package.characters):
             _check(char.character_id, f"characters[{i}].character_id", "Character")
+            for j, sch in enumerate(char.schedule):
+                _check(sch.schedule_id, f"characters[{i}].schedule[{j}].schedule_id", "Schedule")
         for i, loc in enumerate(package.locations):
             _check(loc.location_id, f"locations[{i}].location_id", "Location")
         for i, flag in enumerate(package.flags):
@@ -296,7 +298,34 @@ class UIWLinter:
                         message=f"行程引用了不合法或不存在的時間段：{sch.time_slot}。"
                     ))
 
-                key = (sch.day_type, sch.time_slot, sch.priority)
+                if sch.day_type == "specific_date" and sch.specific_date is None:
+                    issues.append(Issue(
+                        severity="error",
+                        type="missing_specific_date",
+                        path=f"characters[{i}].schedule[{j}].specific_date",
+                        message="行程指定 day_type=specific_date 但未填日期。"
+                    ))
+                elif sch.day_type != "specific_date" and sch.specific_date is not None:
+                    issues.append(Issue(
+                        severity="error",
+                        type="unexpected_specific_date",
+                        path=f"characters[{i}].schedule[{j}].specific_date",
+                        message=f"行程 day_type 不是 specific_date，但填了日期 {sch.specific_date}。"
+                    ))
+                elif sch.specific_date is not None:
+                    if sch.specific_date < package.world.start_date or sch.specific_date > package.world.end_date:
+                        issues.append(Issue(
+                            severity="error",
+                            type="specific_date_out_of_range",
+                            path=f"characters[{i}].schedule[{j}].specific_date",
+                            message=f"行程指定日期 {sch.specific_date} 不在遊戲世界日期範圍 {package.world.start_date}~{package.world.end_date} 內。"
+                        ))
+
+                if sch.day_type == "specific_date" and sch.specific_date is not None:
+                    key = ("specific_date", sch.specific_date, sch.time_slot, sch.priority)
+                else:
+                    key = (sch.day_type, sch.time_slot, sch.priority)
+                
                 if key not in schedule_map:
                     schedule_map[key] = []
                 schedule_map[key].append((j, sch))

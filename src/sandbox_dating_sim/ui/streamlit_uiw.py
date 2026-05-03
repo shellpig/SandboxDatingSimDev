@@ -44,6 +44,8 @@ def _collect_existing_ids() -> set[str]:
     if st.session_state.get("world_id"):
         s.add(st.session_state["world_id"])
     s.update(c["character_id"] for c in st.session_state.get("characters", []) if c.get("character_id"))
+    for c in st.session_state.get("characters", []):
+        s.update(sch["schedule_id"] for sch in c.get("schedule", []) if sch.get("schedule_id"))
     s.update(l["location_id"] for l in st.session_state.get("locations", []) if l.get("location_id"))
     s.update(f["flag_id"] for f in st.session_state.get("flags", []) if f.get("flag_id"))
     s.update(sf["status_id"] for sf in st.session_state.get("status_flags", []) if sf.get("status_id"))
@@ -626,7 +628,7 @@ def _tab_characters():
                     _semantic_choice_input("角色秘密 (最多3個)", sec_key, SECRET_PRESETS, allow_multiple=True, max_items=3, separate_none=True)
 
                     st.markdown("**[角色行程]**")
-                    day_type_map = {"weekday": "平日", "weekend": "週末", "holiday": "假日", "any": "任意"}
+                    day_type_map = {"weekday": "平日", "weekend": "週末", "holiday": "假日", "any": "任意", "specific_date": "特定日期"}
                     time_slot_map = {"morning": "早上", "afternoon": "下午", "evening": "晚上"}
                     prio_map = {"critical": "必定", "route": "路線", "normal": "一般", "ambient": "環境"}
                     loc_name_map = {loc["location_id"]: loc["name"] for loc in st.session_state["locations"]}
@@ -634,6 +636,8 @@ def _tab_characters():
                     if ch.get("schedule"):
                         for s_idx, sch in enumerate(list(ch["schedule"])):
                             d_str = day_type_map.get(sch["day_type"], sch["day_type"])
+                            if sch["day_type"] == "specific_date" and sch.get("specific_date"):
+                                d_str += f" {sch['specific_date']}"
                             t_str = time_slot_map.get(sch["time_slot"], sch["time_slot"])
                             p_str = prio_map.get(sch["priority"], sch["priority"])
                             l_id = sch["location_id"]
@@ -653,25 +657,71 @@ def _tab_characters():
                     if not vis_locs:
                         st.warning("尚無可進入地點，請先在地點頁建立。")
                     else:
-                        with st.form(f"form_add_sch_{c_id}", clear_on_submit=True):
-                            sch_id = st.text_input("行程 ID (英文)", key=f"add_sch_id_{c_id}")
-                            day_types = ["weekday", "weekend", "holiday", "any"]
+                        with st.container():
+                            sch_id = st.text_input("行程 ID (英文，留空則自動產生)", key=f"add_sch_id_{c_id}")
+                            day_types = ["weekday", "weekend", "holiday", "any", "specific_date"]
                             sch_day = st.selectbox("日期類型", day_types, format_func=lambda x: f"{day_type_map.get(x,x)}({x})", key=f"add_sch_day_{c_id}")
+                            
+                            if sch_day == "specific_date":
+                                sch_date = st.date_input(
+                                    "特定日期", 
+                                    min_value=st.session_state["start_date"], 
+                                    max_value=st.session_state["end_date"], 
+                                    value=st.session_state["start_date"],
+                                    key=f"add_sch_date_{c_id}"
+                                )
+                            else:
+                                sch_date = None
+
                             sch_slot = st.selectbox("時間段", ["morning", "afternoon", "evening"], format_func=lambda x: f"{time_slot_map.get(x,x)}({x})", key=f"add_sch_slot_{c_id}")
                             sch_loc = st.selectbox("地點", vis_locs, format_func=lambda x: loc_name_map.get(x, x), key=f"add_sch_loc_{c_id}")
                             sch_prio = st.selectbox("優先權", ["critical", "route", "normal", "ambient"], format_func=lambda x: f"{prio_map.get(x,x)}({x})", key=f"add_sch_prio_{c_id}")
                             sch_order = st.number_input("排序值 (越小越優先)", value=20, key=f"add_sch_order_{c_id}")
                             sch_cond = st.text_input("條件 (逗號分隔，可選)", key=f"add_sch_cond_{c_id}")
 
-                            if st.form_submit_button("新增行程"):
-                                entry = {
-                                    "schedule_id": sch_id, "day_type": sch_day,
-                                    "time_slot": sch_slot, "location_id": sch_loc,
-                                    "priority": sch_prio, "schedule_order": int(sch_order),
-                                    "condition": [c.strip() for c in sch_cond.split(",") if c.strip()],
-                                }
-                                ch["schedule"].append(entry)
-                                st.rerun()
+                            if st.button("新增行程", key=f"btn_add_sch_{c_id}"):
+                                existing_ids = _collect_existing_ids()
+                                
+                                final_sch_id = sch_id.strip()
+                                valid = True
+                                
+                                if not final_sch_id:
+                                    final_sch_id = _make_unique_id(f"{c_id}_{sch_day}_{sch_slot}", "sch_", "sch_unnamed", existing_ids)
+                                else:
+                                    if not re.match(r"^[a-z][a-z0-9_]*$", final_sch_id):
+                                        st.error(f"行程 ID 格式錯誤: {final_sch_id}")
+                                        valid = False
+                                    elif final_sch_id in existing_ids:
+                                        st.error(f"行程 ID 已存在: {final_sch_id}")
+                                        valid = False
+                                
+                                if valid:
+                                    entry = {
+                                        "schedule_id": final_sch_id, "day_type": sch_day,
+                                        "time_slot": sch_slot, "location_id": sch_loc,
+                                        "priority": sch_prio, "schedule_order": int(sch_order),
+                                        "condition": [c.strip() for c in sch_cond.split(",") if c.strip()],
+                                    }
+                                    if sch_day == "specific_date":
+                                        entry["specific_date"] = sch_date
+                                    else:
+                                        entry["specific_date"] = None
+
+                                    ch["schedule"].append(entry)
+                                    
+                                    if not sch_id.strip():
+                                        st.session_state[f"msg_sch_add_{c_id}"] = f"已自動產生行程 ID: `{final_sch_id}`"
+                                    
+                                    for k in [f"add_sch_id_{c_id}", f"add_sch_day_{c_id}", f"add_sch_date_{c_id}", f"add_sch_slot_{c_id}", f"add_sch_loc_{c_id}", f"add_sch_prio_{c_id}", f"add_sch_order_{c_id}", f"add_sch_cond_{c_id}"]:
+                                        if k in st.session_state:
+                                            del st.session_state[k]
+                                            
+                                    st.rerun()
+
+                        msg_key = f"msg_sch_add_{c_id}"
+                        if msg_key in st.session_state:
+                            st.caption(st.session_state[msg_key])
+                            del st.session_state[msg_key]
 
                     st.markdown("**[進階設定 (Advanced Settings)]**")
                     show_adv = st.checkbox("顯示進階設定", key=f"show_adv_{c_id}")

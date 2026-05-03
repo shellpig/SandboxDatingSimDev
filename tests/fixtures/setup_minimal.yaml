@@ -98,6 +98,14 @@ characters:
           - day >= 1
         priority: normal
         schedule_order: 20
+      - schedule_id: sophie_specific_0501
+        day_type: specific_date
+        time_slot: afternoon
+        location_id: school_library
+        specific_date: "2026-05-01"
+        condition: []
+        priority: route
+        schedule_order: 10
     allowed_emotions:
       - id: neutral
         label: 平常

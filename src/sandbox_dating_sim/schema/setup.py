@@ -68,6 +68,7 @@ class ScheduleEntry(BaseModel):
     day_type: DayType
     time_slot: TimeSlot
     location_id: str
+    specific_date: date | None = None
     condition: list[str] = []
     priority: SchedulePriority = "normal"
     schedule_order: int

@@ -27,7 +27,13 @@ def test_tab_characters_keys_and_options(mock_st):
     mock_st.columns.side_effect = lambda x, **kwargs: [MagicMock() for _ in range(len(x))] if isinstance(x, list) else [MagicMock() for _ in range(x)]
     mock_st.text_input.return_value = ""
     mock_st.button.return_value = False
+    
+    from datetime import date
+    mock_st.date_input.return_value = date(2026, 5, 1)
+
     mock_st.session_state = {
+        "start_date": date(2026, 4, 27),
+        "end_date": date(2026, 5, 26),
         "characters": [
             {"character_id": "alice", "display_name": "Alice", "gender": "female", "role": "main_love_interest", "personality_tags": [], "secrets": [], "schedule": []},
             {"character_id": "bob", "display_name": "Bob", "gender": "male", "role": "key_supporting_character", "personality_tags": [], "secrets": [], "schedule": []}
@@ -37,12 +43,12 @@ def test_tab_characters_keys_and_options(mock_st):
 
     _tab_characters()
 
-    # 檢查 specific_date 不出現在新增行程 day_type UI 選項
+    # 檢查 specific_date 出現在新增行程 day_type UI 選項
     day_types_called = False
     for call in mock_st.selectbox.call_args_list:
         if call.kwargs.get("key", "").startswith("add_sch_day_"):
             options = call.args[1]
-            assert "specific_date" not in options
+            assert "specific_date" in options
             day_types_called = True
     assert day_types_called
 
