@@ -12,6 +12,7 @@ from sandbox_dating_sim.schema.setup import (
     Character, ScheduleEntry, AssetOption, FlagDef, StatusFlag,
     StatusDuration, Ending,
 )
+from sandbox_dating_sim.core.ids import _make_unique_id
 from sandbox_dating_sim.uiw.linter import UIWLinter
 from sandbox_dating_sim.pipeline.setup_exporter import SetupPackageExporter
 from sandbox_dating_sim.uiw.defaults import (
@@ -36,7 +37,7 @@ PAGE_LABELS = [
 
 def _collect_existing_ids() -> set[str]:
     """收集全域已存在的系統 ID，用於跨類型唯一性檢查。"""
-    s: set[str] = set()
+    s: set[str] = {"protagonist"} # 1-G-7: 全域 ID 集合補入固定 protagonist
     if st.session_state.get("world_id"):
         s.add(st.session_state["world_id"])
     s.update(c["character_id"] for c in st.session_state.get("characters", []) if c.get("character_id"))
@@ -430,56 +431,75 @@ def _tab_locations():
 
     if st.button("套用模板"):
         tpl = LOCATION_TEMPLATES[tpl_idx]
-        loc_id = tpl.get("location_id_suggestion", tpl["template_id"])
+        suggested_id = tpl.get("location_id_suggestion", tpl["template_id"])
 
-        # Determine all required IDs
-        required_ids = [loc_id]
+        # 1-G-7: 使用 _make_unique_id 進行 suffix 避讓
+        existing_ids = _collect_existing_ids()
+        # 1-G-7 Fix: 模板主地點優先沿用建議 ID (suggested_id) 而非從中文 label 產生 pinyin
+        # 我們將 suggested_id 傳入作為 fallback，並將 prefix 設為空
+        # 注意：_make_unique_id 內部會先呼叫 _slugify_label(label)，這會產生中文拼音。
+        # 為了優先使用 suggested_id，我們在此改採直接邏輯或調整 _make_unique_id 呼叫。
+        # 根據 1-G-7 規格建議：模板應沿用建議 ID。
+        base_id = suggested_id
+        loc_id = base_id
+        if loc_id in existing_ids:
+            counter = 2
+            while True:
+                candidate = f"{loc_id}_{counter}"
+                if candidate not in existing_ids:
+                    loc_id = candidate
+                    break
+                counter += 1
+
+        # 建立主要父地點（或獨立地點）
+        new_loc = {
+            "location_id": loc_id, "name": tpl["label"],
+            "location_type": tpl["location_type"],
+            "parent_location_id": None,
+            "is_visitable": tpl.get("is_visitable", False),
+            "base_cost": tpl.get("base_cost", 0),
+            "available_time_slots": tpl.get("available_time_slots", ["morning", "afternoon"]),
+            "tags": tpl.get("tags", []),
+            "empty_behavior": tpl.get("empty_behavior", "show_empty"),
+        }
+        st.session_state["locations"].append(new_loc)
+
+        # 根據模板中的建議，自動建立對應的子地點
         for sub_id in tpl.get("suggested_sub_locations", []):
             sub_tpl = next((s for s in SUB_LOCATION_TEMPLATES if s["template_id"] == sub_id), None)
             if sub_tpl:
-                required_ids.append(f"{loc_id}_{sub_tpl['location_id_suffix']}")
+                # 1-G-7 Fix: 子地點優先使用父 ID + location_id_suffix
+                sub_base = f"{loc_id}_{sub_tpl['location_id_suffix']}"
+                sub_loc_id = sub_base
+                # 再次確保子地點 ID 唯一
+                curr_ids = _collect_existing_ids()
+                if sub_loc_id in curr_ids:
+                    counter = 2
+                    while True:
+                        candidate = f"{sub_base}_{counter}"
+                        if candidate not in curr_ids:
+                            sub_loc_id = candidate
+                            break
+                        counter += 1
 
-        # Check if any required ID already exists
-        existing_ids = [l["location_id"] for l in st.session_state["locations"]]
-        conflict = next((r_id for r_id in required_ids if r_id in existing_ids), None)
-        if conflict:
-            st.error(f"無法套用模板：地點 ID '{conflict}' 已存在。請先刪除既有地點。")
-        else:
-            # 建立主要父地點（或獨立地點）
-            new_loc = {
-                "location_id": loc_id, "name": tpl["label"],
-                "location_type": tpl["location_type"],
-                "parent_location_id": None,
-                "is_visitable": tpl.get("is_visitable", False),
-                "base_cost": tpl.get("base_cost", 0),
-                "available_time_slots": tpl.get("available_time_slots", ["morning", "afternoon"]),
-                "tags": tpl.get("tags", []),
-                "empty_behavior": tpl.get("empty_behavior", "show_empty"),
-            }
-            st.session_state["locations"].append(new_loc)
-
-            # 根據模板中的建議，自動建立對應的子地點
-            for sub_id in tpl.get("suggested_sub_locations", []):
-                sub_tpl = next((s for s in SUB_LOCATION_TEMPLATES if s["template_id"] == sub_id), None)
-                if sub_tpl:
-                    sub_loc = {
-                        "location_id": f"{loc_id}_{sub_tpl['location_id_suffix']}",
-                        "name": sub_tpl["label"],
-                        "location_type": "sub_location",
-                        "parent_location_id": loc_id,
-                        "is_visitable": True,
-                        "base_cost": 0,
-                        "available_time_slots": sub_tpl.get("available_time_slots", ["morning", "afternoon"]),
-                        "tags": sub_tpl.get("tags", []),
-                        "empty_behavior": "show_empty",
-                    }
-                    st.session_state["locations"].append(sub_loc)
-            st.rerun()
+                sub_loc = {
+                    "location_id": sub_loc_id,
+                    "name": sub_tpl["label"],
+                    "location_type": "sub_location",
+                    "parent_location_id": loc_id,
+                    "is_visitable": True,
+                    "base_cost": 0,
+                    "available_time_slots": sub_tpl.get("available_time_slots", ["morning", "afternoon"]),
+                    "tags": sub_tpl.get("tags", []),
+                    "empty_behavior": "show_empty",
+                }
+                st.session_state["locations"].append(sub_loc)
+        st.rerun()
 
     # --- 手動新增 ---
     st.subheader("手動新增地點")
     with st.form("add_location", clear_on_submit=False):
-        loc_id = st.text_input("地點 ID (英文)", key="add_loc_id")
+        loc_id_input = st.text_input("地點 ID (英文，留空則自動產生)", key="add_loc_id")
         loc_name = st.text_input("地點名稱", key="add_loc_name")
         loc_type_map = {"container": "主地點/區域(container)", "sub_location": "子地點(sub_location)", "standalone": "獨立地點(standalone)"}
         loc_type = st.selectbox("類型", list(loc_type_map.keys()), format_func=lambda x: loc_type_map[x], key="add_loc_type")
@@ -500,20 +520,28 @@ def _tab_locations():
 
 
         if st.form_submit_button("新增地點"):
+            existing_ids = _collect_existing_ids()
+
+            # 1-G-7: 自動產生 ID
+            if not loc_id_input:
+                final_loc_id = _make_unique_id(loc_name, "loc_", "unnamed", existing_ids)
+            else:
+                final_loc_id = loc_id_input
+
             valid = True
-            if not loc_id:
-                st.error("地點 ID 不可為空")
+            if not final_loc_id:
+                st.error("無法產生有效的地點 ID，請手動輸入")
                 valid = False
-            elif not re.match(r"^[a-z][a-z0-9_]*$", loc_id):
-                st.error("地點 ID 格式錯誤 (須為小寫英文、數字、底線，且以英文字母開頭)")
+            elif not re.match(r"^[a-z][a-z0-9_]*$", final_loc_id):
+                st.error(f"地點 ID 格式錯誤: {final_loc_id} (須為小寫英文、數字、底線，且以英文字母開頭)")
                 valid = False
-            elif loc_id in _collect_existing_ids():
-                st.error("地點 ID 已存在 (與既有 ID 衝突)")
+            elif final_loc_id in existing_ids:
+                st.error(f"地點 ID 已存在: {final_loc_id} (與既有 ID 衝突)")
                 valid = False
 
             if valid:
                 new_loc = {
-                    "location_id": loc_id, "name": loc_name,
+                    "location_id": final_loc_id, "name": loc_name,
                     "location_type": loc_type,
                     # 只有子地點才保存父地點 ID
                     "parent_location_id": parent if loc_type == "sub_location" else None,
@@ -524,6 +552,9 @@ def _tab_locations():
                     "empty_behavior": "show_empty",
                 }
                 st.session_state["locations"].append(new_loc)
+                if not loc_id_input:
+                    st.caption(f"已自動產生 ID: `{final_loc_id}`")
+
                 for k in ["add_loc_id", "add_loc_name", "add_loc_type", "add_loc_parent", "add_loc_visit", "add_loc_slots", "add_loc_tags"]:
                     if k in st.session_state:
                         del st.session_state[k]
@@ -718,7 +749,7 @@ def _tab_characters():
 
     st.divider()
     with st.form("add_character", clear_on_submit=False):
-        ch_id = st.text_input("角色 ID (英文)", key="add_ch_id")
+        ch_id_input = st.text_input("角色 ID (英文，留空則自動產生)", key="add_ch_id")
         ch_name = st.text_input("顯示名稱", key="add_ch_name")
 
         gender_ids = [g["id"] for g in GENDER_OPTIONS]
@@ -745,15 +776,23 @@ def _tab_characters():
         sel_pos = st.multiselect("選擇位置", pos_labels, default=pos_labels, key="add_ch_pos")
 
         if st.form_submit_button("新增角色"):
+            existing_ids = _collect_existing_ids()
+
+            # 1-G-7: 自動產生 ID
+            if not ch_id_input:
+                final_ch_id = _make_unique_id(ch_name, "ch_", "unnamed", existing_ids)
+            else:
+                final_ch_id = ch_id_input
+
             valid = True
-            if not ch_id:
-                st.error("角色 ID 不可為空")
+            if not final_ch_id:
+                st.error("無法產生有效的角色 ID，請手動輸入")
                 valid = False
-            elif not re.match(r"^[a-z][a-z0-9_]*$", ch_id):
-                st.error("角色 ID 格式錯誤 (須為小寫英文、數字、底線，且以英文字母開頭)")
+            elif not re.match(r"^[a-z][a-z0-9_]*$", final_ch_id):
+                st.error(f"角色 ID 格式錯誤: {final_ch_id} (須為小寫英文、數字、底線，且以英文字母開頭)")
                 valid = False
-            elif ch_id in _collect_existing_ids():
-                st.error("角色 ID 已存在 (與既有 ID 衝突)")
+            elif final_ch_id in existing_ids:
+                st.error(f"角色 ID 已存在: {final_ch_id} (與既有 ID 衝突)")
                 valid = False
 
             if valid:
@@ -761,7 +800,7 @@ def _tab_characters():
                     return [{"id": p["id"], "label": p["label"]} for p in presets if p["label"] in selected_labels]
 
                 new_ch = {
-                    "character_id": ch_id, "display_name": ch_name,
+                    "character_id": final_ch_id, "display_name": ch_name,
                     "gender": ch_gender, "orientation": ch_orient,
                     "role": ch_role, "identity": ch_identity,
                     "personality_tags": list(st.session_state["temp_ch_tags"]),
@@ -774,6 +813,9 @@ def _tab_characters():
                 st.session_state["temp_ch_tags"] = []
                 st.session_state["temp_ch_secrets"] = []
                 st.session_state["characters"].append(new_ch)
+                if not ch_id_input:
+                    st.caption(f"已自動產生 ID: `{final_ch_id}`")
+
                 for k in ["add_ch_id", "add_ch_name", "add_ch_gender", "add_ch_orient", "add_ch_role", "add_ch_identity", "add_ch_favor", "add_ch_emo", "add_ch_cos", "add_ch_pos"]:
                     if k in st.session_state:
                         del st.session_state[k]
@@ -797,22 +839,48 @@ def _tab_flags():
             st.write(f"• {f['flag_id']} ({f['type']}) = {f['initial_value']} — {f['description']}")
 
     with st.form("add_flag", clear_on_submit=True):
-        f_id = st.text_input("Flag ID")
+        f_id_input = st.text_input("Flag ID (英文，留空則依說明自動產生)", key="add_f_id")
         f_type = st.selectbox("型別", ["boolean", "integer", "string", "enum"])
         f_val = st.text_input("初始值", "false")
         f_desc = st.text_input("說明")
         if st.form_submit_button("新增 Flag"):
-            # 依據選擇的型別強制轉型初始值
-            val = f_val
-            if f_type == "boolean":
-                val = f_val.lower() == "true"
-            elif f_type == "integer":
-                val = int(f_val)
-            st.session_state["flags"].append({
-                "flag_id": f_id, "type": f_type,
-                "initial_value": val, "description": f_desc,
-            })
-            st.rerun()
+            existing_ids = _collect_existing_ids()
+
+            # 1-G-7: 自動產生 ID (依據說明)
+            if not f_id_input:
+                final_f_id = _make_unique_id(f_desc, "flag_", "unnamed", existing_ids)
+            else:
+                final_f_id = f_id_input
+
+            valid = True
+            if not final_f_id:
+                st.error("無法產生有效的 Flag ID，請手動輸入")
+                valid = False
+            elif not re.match(r"^[a-z][a-z0-9_]*$", final_f_id):
+                st.error(f"Flag ID 格式錯誤: {final_f_id}")
+                valid = False
+            elif final_f_id in existing_ids:
+                st.error(f"Flag ID 已存在: {final_f_id}")
+                valid = False
+
+            if valid:
+                # 依據選擇的型別強制轉型初始值
+                val = f_val
+                if f_type == "boolean":
+                    val = f_val.lower() == "true"
+                elif f_type == "integer":
+                    try:
+                        val = int(f_val)
+                    except ValueError:
+                        val = 0
+
+                st.session_state["flags"].append({
+                    "flag_id": final_f_id, "type": f_type,
+                    "initial_value": val, "description": f_desc,
+                })
+                if not f_id_input:
+                    st.caption(f"已自動產生 ID: `{final_f_id}`")
+                st.rerun()
 
     # --- Status Flags (狀態效果) ---
     st.subheader("狀態旗標 (Status Flags)")
@@ -821,7 +889,7 @@ def _tab_flags():
             st.write(f"• {sf['status_id']} — {sf['description']}")
 
     with st.form("add_status_flag", clear_on_submit=True):
-        sf_id = st.text_input("Status ID")
+        sf_id_input = st.text_input("Status ID (英文，留空則依顯示名稱產生)", key="add_sf_id")
         sf_label = st.text_input("顯示名稱")
         sf_target = st.text_input("作用對象", "protagonist")
         sf_effect_key = st.text_input("效果 key (例: block_time_slot)")
@@ -835,16 +903,38 @@ def _tab_flags():
         sf_perm_reason = st.text_input("永久原因（若 permanent）", "")
 
         if st.form_submit_button("新增 Status Flag"):
-            entry = {
-                "status_id": sf_id, "label": sf_label, "target": sf_target,
-                "effect": [{sf_effect_key: sf_effect_val}] if sf_effect_key else [],
-                "duration": {"type": sf_dur_type, "value": sf_dur_val if sf_dur_type != "permanent" else None},
-                "clear_rule": sf_clear, "description": sf_desc,
-            }
-            if sf_perm_reason:
-                entry["permanent_reason"] = sf_perm_reason
-            st.session_state["status_flags"].append(entry)
-            st.rerun()
+            existing_ids = _collect_existing_ids()
+
+            # 1-G-7: 自動產生 ID (依據顯示名稱)
+            if not sf_id_input:
+                final_sf_id = _make_unique_id(sf_label, "status_", "unnamed", existing_ids)
+            else:
+                final_sf_id = sf_id_input
+
+            valid = True
+            if not final_sf_id:
+                st.error("無法產生有效的 Status ID，請手動輸入")
+                valid = False
+            elif not re.match(r"^[a-z][a-z0-9_]*$", final_sf_id):
+                st.error(f"Status ID 格式錯誤: {final_sf_id}")
+                valid = False
+            elif final_sf_id in existing_ids:
+                st.error(f"Status ID 已存在: {final_sf_id}")
+                valid = False
+
+            if valid:
+                entry = {
+                    "status_id": final_sf_id, "label": sf_label, "target": sf_target,
+                    "effect": [{sf_effect_key: sf_effect_val}] if sf_effect_key else [],
+                    "duration": {"type": sf_dur_type, "value": sf_dur_val if sf_dur_type != "permanent" else None},
+                    "clear_rule": sf_clear, "description": sf_desc,
+                }
+                if sf_perm_reason:
+                    entry["permanent_reason"] = sf_perm_reason
+                st.session_state["status_flags"].append(entry)
+                if not sf_id_input:
+                    st.caption(f"已自動產生 ID: `{final_sf_id}`")
+                st.rerun()
 
     _next_page_button(PAGE_LABELS[4])
 
@@ -1040,7 +1130,7 @@ def _tab_endings():
 
     st.subheader("新增結局")
     with st.form("add_ending", clear_on_submit=False):
-        e_id = st.text_input("Ending ID", key="add_end_id")
+        e_id_input = st.text_input("Ending ID (英文，留空則依標題自動產生)", key="add_end_id")
         e_title = st.text_input("結局標題", key="add_end_title")
         e_type = st.text_input("結局類型 (例: character_good)", key="add_end_type")
 
@@ -1062,21 +1152,29 @@ def _tab_endings():
         e_rtags = st.text_input("route_tags (逗號分隔)", key="add_end_rtags")
 
         if st.form_submit_button("新增結局"):
+            existing_ids = _collect_existing_ids()
+
+            # 1-G-7: 自動產生 ID (依據標題)
+            if not e_id_input:
+                final_e_id = _make_unique_id(e_title, "end_", "unnamed", existing_ids)
+            else:
+                final_e_id = e_id_input
+
             # 即時驗證：Ending ID
             valid = True
-            if not e_id:
-                st.error("Ending ID 不可為空")
+            if not final_e_id:
+                st.error("無法產生有效的 Ending ID，請手動輸入")
                 valid = False
-            elif not re.match(r"^[a-z][a-z0-9_]*$", e_id):
-                st.error("Ending ID 格式錯誤 (須為小寫英文、數字、底線，且以英文字母開頭)")
+            elif not re.match(r"^[a-z][a-z0-9_]*$", final_e_id):
+                st.error(f"Ending ID 格式錯誤: {final_e_id}")
                 valid = False
-            elif e_id in _collect_existing_ids():
-                st.error("Ending ID 已存在 (與既有 ID 衝突)")
+            elif final_e_id in existing_ids:
+                st.error(f"Ending ID 已存在: {final_e_id}")
                 valid = False
 
             if valid:
                 st.session_state["endings"].append({
-                    "ending_id": e_id, "title": e_title, "ending_type": e_type,
+                    "ending_id": final_e_id, "title": e_title, "ending_type": e_type,
                     "target_character_id": e_target if e_target else None,
                     "description": e_desc,
                     "required_flags": [x.strip() for x in e_req_flags.split(",") if x.strip()],
@@ -1085,6 +1183,9 @@ def _tab_endings():
                     "priority": e_prio,
                     "route_tags": [x.strip() for x in e_rtags.split(",") if x.strip()],
                 })
+                if not e_id_input:
+                    st.caption(f"已自動產生 ID: `{final_e_id}`")
+
                 for k in ["add_end_id", "add_end_title", "add_end_type", "add_end_target", "add_end_desc", "add_end_req_f", "add_end_req_s", "add_end_forb_f", "add_end_prio", "add_end_rtags"]:
                     if k in st.session_state:
                         del st.session_state[k]
@@ -1217,3 +1318,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+()
+()

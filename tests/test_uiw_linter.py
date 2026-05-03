@@ -182,3 +182,43 @@ def test_linter_rejects_duplicate_personality_tag_id():
     report = linter.validate(pkg)
     assert report.status == "failed"
     assert any(i.type == "duplicate_personality_tag_id" for i in report.issues)
+
+
+def test_linter_rejects_duplicate_status_id():
+    """status_id 與 character_id 衝突時應產生 error。"""
+    from sandbox_dating_sim.schema.setup import StatusFlag, StatusDuration
+    pkg = load_yaml("setup_minimal.yaml")
+    # pkg_minimal 中的 character_id 是 "sophie"
+    pkg.status_flags.append(StatusFlag(
+        status_id="sophie",
+        label="過勞",
+        target="protagonist",
+        effect=[{"block_time_slot": "evening"}],
+        duration=StatusDuration(type="days", value=1),
+        clear_rule=["on_rest"],
+        description="..."
+    ))
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "duplicate_id" for i in report.issues)
+    assert any("已被 characters[0].character_id 使用" in i.message for i in report.issues)
+
+
+def test_linter_rejects_invalid_status_id_format():
+    """status_id 格式不合法時應產生 error。"""
+    from sandbox_dating_sim.schema.setup import StatusFlag, StatusDuration
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.status_flags.append(StatusFlag(
+        status_id="Status-123",
+        label="過勞",
+        target="protagonist",
+        effect=[{"block_time_slot": "evening"}],
+        duration=StatusDuration(type="days", value=1),
+        clear_rule=["on_rest"],
+        description="..."
+    ))
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "invalid_id_format" for i in report.issues)

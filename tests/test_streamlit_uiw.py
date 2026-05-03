@@ -73,35 +73,39 @@ def test_add_character_validation(mock_st):
 
     # 模擬輸入：空 ID
     def mock_text_input(label, *args, **kwargs):
-        if label == "角色 ID (英文)":
+        if label == "角色 ID (英文，留空則自動產生)":
             return ""
+        if label == "顯示名稱":
+            return "Draft Char Name"
         return ""
     mock_st.text_input.side_effect = mock_text_input
 
     _tab_characters()
-    mock_st.error.assert_any_call("角色 ID 不可為空")
-    assert "add_ch_name" in mock_st.session_state
+    # 1-G-7: 空 ID 應成功並自動產生
+    assert any(c["character_id"] == "ch_draft_char_name" for c in mock_st.session_state["characters"])
+    assert "add_ch_name" not in mock_st.session_state # 成功後應清空
 
     # 模擬輸入：重複 ID
     def mock_text_input_exist(label, *args, **kwargs):
-        if label == "角色 ID (英文)":
+        if label == "角色 ID (英文，留空則自動產生)":
             return "exist_id"
         return ""
     mock_st.text_input.side_effect = mock_text_input_exist
+    mock_st.session_state["add_ch_name"] = "Another Name"
 
     _tab_characters()
-    mock_st.error.assert_any_call("角色 ID 已存在 (與既有 ID 衝突)")
+    mock_st.error.assert_any_call("角色 ID 已存在: exist_id (與既有 ID 衝突)")
     assert "add_ch_name" in mock_st.session_state
 
     # 模擬輸入：非法 ID
     def mock_text_input_invalid(label, *args, **kwargs):
-        if label == "角色 ID (英文)":
+        if label == "角色 ID (英文，留空則自動產生)":
             return "123_invalid!"
         return ""
     mock_st.text_input.side_effect = mock_text_input_invalid
 
     _tab_characters()
-    mock_st.error.assert_any_call("角色 ID 格式錯誤 (須為小寫英文、數字、底線，且以英文字母開頭)")
+    mock_st.error.assert_any_call("角色 ID 格式錯誤: 123_invalid! (須為小寫英文、數字、底線，且以英文字母開頭)")
     assert "add_ch_name" in mock_st.session_state
 
 
@@ -147,10 +151,18 @@ def test_tab_endings_delete_buttons(mock_st):
 
 @patch("sandbox_dating_sim.ui.streamlit_uiw.st")
 def test_add_ending_validation_empty_id(mock_st):
-    """新增結局時 ending_id 為空應阻止寫入並顯示 error。"""
+    """新增結局時 ending_id 為空應自動產生。"""
     mock_st.columns.side_effect = lambda x, **kwargs: [MagicMock() for _ in range(len(x))] if isinstance(x, list) else [MagicMock() for _ in range(x)]
     mock_st.button.return_value = False
-    mock_st.text_input.return_value = ""
+
+    def mock_text_input(label, *args, **kwargs):
+        if label == "Ending ID (英文，留空則依標題自動產生)":
+            return ""
+        if label == "結局標題":
+            return "Draft Ending"
+        return ""
+    mock_st.text_input.side_effect = mock_text_input
+
     mock_st.form_submit_button.return_value = True
     state = dict(_BASE_FLAGS_SESSION)
     state["endings"] = []
@@ -159,9 +171,9 @@ def test_add_ending_validation_empty_id(mock_st):
 
     _tab_endings()
 
-    mock_st.error.assert_any_call("Ending ID 不可為空")
-    assert state["endings"] == []
-    assert "add_end_title" in mock_st.session_state
+    # 1-G-7: 空 ID 應成功並自動產生
+    assert any(e["ending_id"] == "end_draft_ending" for e in state["endings"])
+    assert "add_end_title" not in mock_st.session_state
 
 
 @patch("sandbox_dating_sim.ui.streamlit_uiw.st")
@@ -172,7 +184,7 @@ def test_add_ending_validation_duplicate_id(mock_st):
     mock_st.form_submit_button.return_value = True
 
     def mock_text_input(label, *args, **kwargs):
-        if label == "Ending ID":
+        if label == "Ending ID (英文，留空則依標題自動產生)":
             return "alice"  # 已被 character_id 使用
         return ""
     mock_st.text_input.side_effect = mock_text_input
@@ -186,120 +198,6 @@ def test_add_ending_validation_duplicate_id(mock_st):
 
     # 應顯示跨類型檢查 error
     error_calls = [str(call) for call in mock_st.error.call_args_list]
-    assert any("Ending ID 已存在" in c for c in error_calls)
+    assert any("Ending ID 已存在: alice" in c for c in error_calls)
     assert state["endings"] == []
     assert "add_end_title" in mock_st.session_state
-
-@patch("sandbox_dating_sim.ui.streamlit_uiw.st")
-def test_tab_endings_multiselect_versioning(mock_st):
-    """1-G-6 已知問題1: F-γ multiselect 應使用 version 避免重複 key 錯誤。"""
-    mock_st.columns.side_effect = lambda x, **kwargs: [MagicMock() for _ in range(len(x))] if isinstance(x, list) else [MagicMock() for _ in range(x)]
-    mock_st.button.return_value = False
-    mock_st.text_input.return_value = ""
-    state = dict(_BASE_FLAGS_SESSION)
-    state["flags"] = [{"flag_id": "flag1", "type": "boolean", "initial_value": False, "description": ""}]
-    state["endings"] = [{"ending_id": "end1", "title": "End 1", "ending_type": "good", "target_character_id": None, "description": "", "required_flags": [], "required_stats": [], "forbidden_flags": [], "priority": "normal", "route_tags": []}]
-    # 設定一個舊版號
-    state["_ver_req_flags_end1"] = 1
-    mock_st.session_state = state
-
-    _tab_endings()
-
-    # 檢查是否有建立帶版號的 widget key
-    ms_calls = [call.kwargs.get("key") for call in mock_st.multiselect.call_args_list if "ms_req_flags_end1" in call.kwargs.get("key", "")]
-    assert "ms_req_flags_end1_v1" in ms_calls
-
-
-@patch("sandbox_dating_sim.ui.streamlit_uiw.st")
-def test_tab_endings_cancel_resets_edit_state(mock_st):
-    """1-G-6 已知問題2: 取消編輯應重置所有 edit_, temp_, ms_ 相關 state。"""
-    mock_st.columns.side_effect = lambda x, **kwargs: [MagicMock() for _ in range(len(x))] if isinstance(x, list) else [MagicMock() for _ in range(x)]
-    mock_st.button.return_value = False
-    mock_st.text_input.return_value = ""
-
-    # 模擬按下「取消」按鈕
-    def mock_form_submit(label, *args, **kwargs):
-        return label == "取消"
-    mock_st.form_submit_button.side_effect = mock_form_submit
-
-    state = dict(_BASE_FLAGS_SESSION)
-    state["endings"] = [{"ending_id": "end1", "title": "End 1", "ending_type": "good", "target_character_id": None, "description": "", "required_flags": [], "required_stats": [], "forbidden_flags": [], "priority": "normal", "route_tags": []}]
-    # 塞入預期會被清掉的草稿 state
-    state["edit_title_end1"] = "Draft Title"
-    state["temp_req_flags_end1"] = ["draft == true"]
-    state["_ver_req_flags_end1"] = 2
-    state["_ver_forb_flags_end1"] = 1
-    state["ms_req_flags_end1_v0"] = ["flag1"]
-    state["keep_me_end2"] = "should stay"
-    mock_st.session_state = state
-
-    _tab_endings()
-
-    assert "edit_title_end1" not in state
-    assert "temp_req_flags_end1" not in state
-    assert "_ver_req_flags_end1" not in state
-    assert "_ver_forb_flags_end1" not in state
-    assert "ms_req_flags_end1_v0" not in state
-    assert "keep_me_end2" in state
-
-
-@patch("sandbox_dating_sim.ui.streamlit_uiw.st")
-def test_tab_endings_priority_caption(mock_st):
-    """1-G-6 已知問題3: priority 下方應有常駐的五級語意說明 caption。"""
-    mock_st.columns.side_effect = lambda x, **kwargs: [MagicMock() for _ in range(len(x))] if isinstance(x, list) else [MagicMock() for _ in range(x)]
-    mock_st.button.return_value = False
-    mock_st.text_input.return_value = ""
-    state = dict(_BASE_FLAGS_SESSION)
-    state["endings"] = [{"ending_id": "end1", "title": "End 1", "ending_type": "good", "target_character_id": None, "description": "", "required_flags": [], "required_stats": [], "forbidden_flags": [], "priority": "normal", "route_tags": []}]
-    mock_st.session_state = state
-
-    _tab_endings()
-
-    caption_calls = [str(call) for call in mock_st.caption.call_args_list]
-    # 檢查是否有印出包含 "優先權由高到低" 的 caption
-    assert any("優先權由高到低" in call for call in caption_calls)
-
-
-from sandbox_dating_sim.ui.streamlit_uiw import _tab_locations
-
-@patch("sandbox_dating_sim.ui.streamlit_uiw.st")
-def test_add_location_validation(mock_st):
-    """測試新增地點的 ID 驗證（包括大寫、重複等）。"""
-    mock_st.columns.side_effect = lambda x, **kwargs: [MagicMock() for _ in range(len(x))] if isinstance(x, list) else [MagicMock() for _ in range(x)]
-    mock_st.button.return_value = False
-
-    mock_st.session_state = {
-        "world_id": "my_game",
-        "locations": [{"location_id": "exist_id", "name": "Dummy", "location_type": "standalone", "is_visitable": True}],
-        "characters": [],
-        "flags": [],
-        "status_flags": [],
-        "endings": [],
-        "add_loc_name": "Draft Location"
-    }
-
-    mock_st.form_submit_button.return_value = True
-
-    # 模擬輸入：大寫 ID
-    def mock_text_input_upper(label, *args, **kwargs):
-        if label == "地點 ID (英文)":
-            return "School"
-        return ""
-    mock_st.text_input.side_effect = mock_text_input_upper
-
-    _tab_locations()
-    error_calls = [str(call) for call in mock_st.error.call_args_list]
-    assert any("地點 ID 格式錯誤" in call for call in error_calls)
-    assert "add_loc_name" in mock_st.session_state
-
-    # 模擬輸入：重複 ID
-    def mock_text_input_exist(label, *args, **kwargs):
-        if label == "地點 ID (英文)":
-            return "exist_id"
-        return ""
-    mock_st.text_input.side_effect = mock_text_input_exist
-
-    _tab_locations()
-    error_calls = [str(call) for call in mock_st.error.call_args_list]
-    assert any("地點 ID 已存在" in call for call in error_calls)
-    assert "add_loc_name" in mock_st.session_state

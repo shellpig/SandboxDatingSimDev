@@ -130,6 +130,8 @@ class UIWLinter:
             _check(loc.location_id, f"locations[{i}].location_id", "Location")
         for i, flag in enumerate(package.flags):
             _check(flag.flag_id, f"flags[{i}].flag_id", "Flag")
+        for i, status in enumerate(package.status_flags):
+            _check(status.status_id, f"status_flags[{i}].status_id", "Status Flag")
         for i, end in enumerate(package.endings):
             _check(end.ending_id, f"endings[{i}].ending_id", "Ending")
         
