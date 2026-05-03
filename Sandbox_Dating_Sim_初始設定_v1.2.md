@@ -4,6 +4,8 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.2.17 | 2026-05-03 | 補強 Phase 1-G-8 規格：挑邊「空 `targets` 由 schema `Field(min_length=1)` 拒絕」+「`model_validator(mode="before")` 在 schema 層 normalize 舊 `target`」；明列 fixture / 既有測試遷移工作；明列 1-G-5 / 1-G-6 同步更新；新增 UIW Linter issue types `unknown_status_target` / `empty_status_targets` / `unexpected_duration_value`；引用比對改用 word-boundary regex；`duration.type ∈ {until_event, until_cleared}` 時不顯示 value 並存 None；補純函式 helper、effect YAML corner cases、targets UI dedupe、widget key prefix 與 silent migration 鏈路。 |
+| v1.2.16 | 2026-05-03 | 新增 Phase 1-G-8 規格：旗標 / 狀態頁改為清單 + inline expander 編輯；`StatusFlag.target` 升級為 `targets: list[str]`，UI 以主角 + 角色複選；持續類型改為中文(英文) 選項並加說明；`effect` 採 YAML text_area 保留 list[dict]；新增 flag/status 刪除引用防呆、keyed state 清理與相關驗收。 |
 | v1.2.15 | 2026-05-03 | 補強 Phase 1-G-7 規格：全域 ID 集合補入固定 `protagonist`；明示「自動 ID 路徑因 prefix 隔離不會跨類衝突，跨類唯一只在進階手動 ID／模板套用／匯入既有資料時觸發」；模板衝突挑邊為「自動 suffix 避讓」；預覽 ID 時機定為「submit 後 caption」；suffix 連鎖規則為「順序遞增取最小未占用」。 |
 | v1.2.14 | 2026-05-03 | 修正 Phase 1-G-7 規格：結局範例 ID 改為純拼音 `end_su_fei_hao_jie_ju`；旗標 ID 來源欄位改為 `description`；補 description slug 截斷、標點處理、`unnamed` fallback 與 `_make_unique_id` 包裝既有 `_generate_system_id` 的限制。 |
 | v1.2.13 | 2026-05-03 | 新增 Phase 1-G-7 規格：地點 / NPC / 旗標 / 狀態 / 結局新增流程不再要求使用者輸入英文 ID，改由 UI 依中文名稱、標題、description 或 label 自動產生唯一 canonical ID；既有 ID rename / 引用搬移不納入本 phase。 |
@@ -1834,7 +1836,7 @@ Phase 1-G-5 是使用者實際操作 Interactive UIW 角色設定頁後的操作
 刪除角色前必須掃描下列引用：
 
 - `endings[].target_character_id` 命中該 `character_id` → 阻擋。
-- `status_flags[].target` 命中該 `character_id`（排除 `protagonist`、`global` 與空字串等特殊值）→ 阻擋。
+- `status_flags[].targets` 包含該 `character_id`（排除 `protagonist`、`global` 與空字串等特殊值）→ 阻擋。匯入舊格式 `status_flags[].target` 時，1-G-8 parser 相容層需先正規化為 `targets`。
 
 阻擋時以 `st.toast(..., icon="🚨")` 顯示，避免打亂角色清單排版。範例：
 
@@ -2116,7 +2118,8 @@ Status Flags 用於描述會影響移動、時間或事件觸發的狀態。
 status_flags:
   - status_id: overworked
     label: 過勞
-    target: protagonist
+    targets:
+      - protagonist
     effect:
       - block_time_slot: evening
     duration:
@@ -2132,7 +2135,7 @@ status_flags:
 
 - `status_id`: 狀態旗標的英文唯一 ID。
 - `label`: 使用者介面顯示的中文名稱。
-- `target`: 狀態作用對象，例如 `protagonist` 或特定 `character_id`。
+- `targets`: 狀態可作用對象清單，例如 `protagonist` 或特定 `character_id`。1-G-8 起由單一 `target` 升級為複選清單；runtime 實際套用時仍可用 `status.<target_id>.<status_id>` 指定某一對象。
 - `effect`: 狀態造成的規則效果，例如鎖定時間段、禁止移動、限制地點、修改數值倍率。輸出為 list of dict，每筆使用單鍵格式（例如 `- block_time_slot: evening`）。Phase 3 Status Manager 才解析 dict 內容；資料層僅要求非空。
 - `duration`: 狀態持續時間。
 - `clear_rule`: 狀態解除條件。
@@ -2623,8 +2626,195 @@ endings[].ending_id
 
 - canonical data 仍保存英文 ID。
 - UI 顯示中文名稱、標題與 label；底層引用仍使用英文 ID。
-- 新增後，地點 parent、角色 schedule、結局 target、status target 等引用欄位底層 value 不變。
+- 新增後，地點 parent、角色 schedule、結局 target、status targets 等引用欄位底層 value 不變。
 - 不處理既有 ID rename，因此不需要搬移 reference 或 session state key。
+
+---
+
+### 5.6 Phase 1-G-8 旗標 / 狀態頁 inline 編輯規格
+
+Phase 1-G-8 補完「旗標與狀態(Flags & Status)」分頁。此頁應比照地點、角色與結局頁，提供目前清單、每筆 inline expander 編輯、刪除防呆與成功 / 取消行為。此階段同時將 status 作用對象從單一欄位升級為可複選。
+
+#### 範圍
+
+包含：
+
+- 旗標清單顯示、inline 編輯、刪除引用防呆。
+- 狀態清單顯示、inline 編輯、刪除引用防呆。
+- `flag_id` / `status_id` 唯讀，不做 rename。
+- 狀態作用對象改為主角 + 角色複選。
+- 狀態持續類型使用中文(英文) 選項，並顯示說明。
+- `effect` 用 YAML 編輯，保留 list of dict 結構。
+- **同步更新範圍**：
+  - 1-G-5 角色刪除防呆對 `status_flags[].target` 的引用比對改用「`targets` 包含」並先經 normalize。
+  - 1-G-6 結局頁與其他可能掃描 `target` 的位置同步改 `targets`。
+  - `tests/fixtures/setup_minimal.yaml`、`tests/test_setup_schema.py`、`tests/test_uiw_linter.py` 內既有 `target=` 構造遷移為 `targets=[...]`。
+  - 新增 `tests/fixtures/setup_legacy_status_target.yaml`（保留舊 `target:` 欄位）作為 parser 相容層測試 fixture。
+
+排除：
+
+- 不做完整 Status Manager runtime。
+- 不解析 `effect` 內容的 domain 語意。
+- 不掃描 Event Blueprint / Scene Draft 外部引用。
+- 不把結局頁 `required_stats` 改成 status multiselect。
+- 不處理 NPC `character_id == "protagonist"` 歷史衝突資料；UI 以 dedupe 規避，linter 修補留後續 phase。
+
+#### `StatusFlag.targets`
+
+1-G-8 起，Status Flag canonical data 使用：
+
+```yaml
+status_flags:
+  - status_id: overworked
+    label: 過勞
+    targets:
+      - protagonist
+      - sophie
+    effect:
+      - block_time_slot: evening
+    duration:
+      type: time_slots
+      value: 1
+    clear_rule:
+      - on_time_advance
+      - on_rest
+    description: 太累，晚上無法外出。
+```
+
+規則：
+
+- `targets` 必須是非空 list；schema 層以 `Field(min_length=1)` 直接拒絕空 list。
+- 可選值為固定 `protagonist` 與 `characters[].character_id`。
+- UI 顯示為「主角(protagonist)」與「角色顯示名(character_id)」；`_status_targets_options` 須 dedupe，避免 NPC `character_id == "protagonist"` 出現重複選項。
+- 舊資料含 `target: protagonist` 時，由 `StatusFlag.model_validator(mode="before")` 在 schema 層 normalize 為 `targets: ["protagonist"]`（不在 parser 手動處理，避免相容邏輯散落）。exporter 一律輸出 `targets`。
+- 若新格式與舊格式同時存在（同筆同時有 `targets` 與 `target`），新格式優先，`target` 直接捨棄。
+- `targets` 表示此 status 可作用的對象清單，不代表 runtime 一定同時套用到所有對象。
+
+挑邊摘要：
+
+- **空 targets**：schema 層 `Field(min_length=1)` 拒絕（最後防線）；UI 層 submit 前先擋一次給友善訊息；UIW Linter 補一條 `empty_status_targets` 錯誤訊息以對齊使用者語境。
+- **normalize 落點**：schema `model_validator(mode="before")`，所有進入點通吃。
+
+#### 旗標 inline 編輯
+
+清單顯示：
+
+```text
+{description or flag_id} · {type} · 初始值 {initial_value}
+```
+
+編輯欄位：
+
+- `flag_id`：唯讀。
+- `type`：`boolean` / `integer` / `string` / `enum`。
+- `initial_value`：
+  - `boolean` 用 `true` / `false` 選項。
+  - `integer` 用數字輸入。
+  - `string` 用文字輸入。
+  - `enum` 本期仍用文字輸入，不新增 enum choices schema。
+- `description`：文字輸入。
+
+刪除前需檢查：
+
+- `endings[].required_flags`
+- `endings[].forbidden_flags`
+- `characters[].schedule[].condition`
+
+若命中 `flag.<flag_id>`，阻止刪除並列出引用位置。
+
+#### 狀態 inline 編輯
+
+清單顯示：
+
+```text
+{label or status_id} · {targets 顯示} · {duration.type 中文} · {clear_rule 摘要}
+```
+
+編輯欄位：
+
+- `status_id`：唯讀。
+- `label`：顯示名稱。
+- `targets`：主角 + 角色複選，至少一個。
+- `description`：說明。
+- `effect`：YAML text_area，必須能 parse 成非空 `list[dict]`。
+- `duration.type`：中文(英文) selectbox。
+- `duration.value`：非永久狀態使用；永久狀態存 `None`。
+- `clear_rule`：解除條件 multiselect。
+- `permanent_reason`：`duration.type == permanent` 時必填。
+
+`effect` 範例：
+
+```yaml
+- block_time_slot: evening
+- stat_multiplier:
+    stat: CHA
+    value: 0.8
+```
+
+#### 持續類型 UI 說明
+
+`duration.type` selectbox 顯示：
+
+| canonical | UI 顯示 | 說明 |
+| :--- | :--- | :--- |
+| `time_slots` | 時段數(time_slots) | 經過指定數量的早上 / 下午 / 晚上後解除。 |
+| `days` | 天數(days) | 經過指定天數後解除。 |
+| `until_event` | 直到事件(until_event) | 直到特定劇情事件處理後解除；本期不解析事件 ID。 |
+| `until_cleared` | 直到解除(until_cleared) | 持續到某個 clear_rule 被觸發。 |
+| `permanent` | 永久(permanent) | 長期狀態；必須填永久原因。 |
+
+UI 應在 selectbox 下方顯示目前選項的說明 caption，避免使用者只看到英文 enum。
+
+#### `duration.value` 規則
+
+| `duration.type` | UI 顯示 value 欄位 | canonical value |
+| :--- | :--- | :--- |
+| `time_slots` | 顯示 number_input，必填正整數 | `int >= 1` |
+| `days` | 顯示 number_input，必填正整數 | `int >= 1` |
+| `until_event` | 不顯示 | `None`（舊資料帶數字也 normalize 為 None） |
+| `until_cleared` | 不顯示 | `None` |
+| `permanent` | 不顯示 | `None`（並必填 `permanent_reason`） |
+
+UIW Linter 對 `until_event` / `until_cleared` 但 value 非 None 報 `unexpected_duration_value` warning（不擋匯出，提醒使用者清整資料）。
+
+#### 狀態刪除防呆
+
+刪除 status 前需掃描：
+
+- `endings[].required_stats`
+- `characters[].schedule[].condition`
+- 1-G-5 角色刪除路徑：比對 `status_flags[].targets` 是否包含該 `character_id`（normalize 後比對）。
+
+引用比對採 **word-boundary regex**，不可使用 substring `in`：
+
+- qualified：`\bstatus\.<target_id>\.<status_id>\b`
+- bare：`\bstatus\.<status_id>\b`（須排除已被 qualified 命中的範圍）
+
+flag 引用比對同樣採 `\bflag\.<flag_id>\b`，避免 `flag.over_x` 撞 `flag.over`。
+
+若命中其中一種，阻止刪除並列引用位置。沒有引用才刪除，並清空該 `status_id` 對應的 keyed session state。
+
+#### UIW Linter 新增 issue types
+
+| issue type | severity | 描述 |
+| :--- | :--- | :--- |
+| `unknown_status_target` | error | `targets` 引用了非 `protagonist` 也非既有 NPC `character_id` 的對象。 |
+| `empty_status_targets` | error | `targets` 為空（與 schema `Field(min_length=1)` 重複，提供使用者友善訊息與 path）。 |
+| `unexpected_duration_value` | warning | `duration.type ∈ {until_event, until_cleared}` 但 `value` 非 None。 |
+
+#### 儲存與取消
+
+- 編輯期間不立即寫回 canonical。
+- 「儲存修改」驗證成功才寫回。
+- 「取消」清空該筆 keyed temp state，下一次開啟時重新從 canonical 初始化。
+- 解析 YAML 或欄位驗證失敗時，不寫回、不清空使用者輸入。
+
+#### 不變項
+
+- 新增旗標 / 狀態仍沿用 1-G-7 自動 ID。
+- `flag_id` / `status_id` 仍為英文 canonical ID。
+- status runtime 套用語法仍可用 `status.<target_id>.<status_id>`。
+- `status_id` 的格式與跨類型唯一檢查已在 1-G-7 收尾先行補入；1-G-8 只需納入回歸驗收。
 
 ---
 
