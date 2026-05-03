@@ -23,6 +23,9 @@ from sandbox_dating_sim.uiw.defaults import (
     GENDER_OPTIONS, ORIENTATION_OPTIONS, ROLE_OPTIONS,
     CHARACTER_PERSONALITY_TAG_PRESETS, PROTAGONIST_DEFAULT_AGE,
 )
+from sandbox_dating_sim.uiw.helpers import (
+    _has_flag_reference, _has_status_reference, _parse_effect_yaml, _status_targets_options
+)
 
 
 PAGE_LABELS = [
@@ -729,7 +732,7 @@ def _tab_characters():
                         if e.get("target_character_id") == c_id:
                             ref_msgs.append(f"結局 {e['ending_id']}")
                     for sf in st.session_state.get("status_flags", []):
-                        if sf.get("target") == c_id:
+                        if c_id in sf.get("targets", []):
                             ref_msgs.append(f"狀態旗標 {sf['status_id']}")
                     if ref_msgs:
                         st.toast(f"無法刪除：被 {'、'.join(ref_msgs)} 引用", icon="🚨")
@@ -824,6 +827,16 @@ def _tab_characters():
     _next_page_button(PAGE_LABELS[3])
 
 
+def _purge_flag_state(flag_id: str) -> None:
+    keys_to_drop = [k for k in list(st.session_state.keys()) if k.endswith(f"_{flag_id}")]
+    for k in keys_to_drop:
+        del st.session_state[k]
+
+def _purge_status_state(status_id: str) -> None:
+    keys_to_drop = [k for k in list(st.session_state.keys()) if k.endswith(f"_{status_id}")]
+    for k in keys_to_drop:
+        del st.session_state[k]
+
 def _tab_flags():
     """
     渲染「旗標、狀態與結局」分頁。
@@ -835,106 +848,325 @@ def _tab_flags():
     # --- Flags (全域變數) ---
     st.subheader("旗標 (Flags)")
     if st.session_state["flags"]:
-        for i, f in enumerate(st.session_state["flags"]):
-            st.write(f"• {f['flag_id']} ({f['type']}) = {f['initial_value']} — {f['description']}")
+        for i, f in enumerate(list(st.session_state["flags"])):
+            f_id = f["flag_id"]
+            label = f"{f.get('description') or f_id} · {f['type']} · 初始值 {f['initial_value']}"
+            c1, c2 = st.columns([5, 1], vertical_alignment="center")
+            with c1:
+                with st.expander(label):
+                    st.markdown("**[基本資訊]**")
+                    st.text(f"旗標 ID (唯讀): {f_id}")
+                    e_type = st.selectbox("型別", ["boolean", "integer", "string", "enum"], index=["boolean", "integer", "string", "enum"].index(f["type"]), key=f"flag_type_{f_id}")
 
-    with st.form("add_flag", clear_on_submit=True):
-        f_id_input = st.text_input("Flag ID (英文，留空則依說明自動產生)", key="add_f_id")
-        f_type = st.selectbox("型別", ["boolean", "integer", "string", "enum"])
-        f_val = st.text_input("初始值", "false")
-        f_desc = st.text_input("說明")
-        if st.form_submit_button("新增 Flag"):
-            existing_ids = _collect_existing_ids()
+                    cur_val = f["initial_value"]
+                    if e_type == "boolean":
+                        cur_idx = 0 if cur_val is True else 1
+                        e_val_bool = st.selectbox("初始值", ["true", "false"], index=cur_idx, key=f"flag_init_{f_id}")
+                        e_val = (e_val_bool == "true")
+                    elif e_type == "integer":
+                        e_val = st.number_input("初始值", value=int(cur_val) if isinstance(cur_val, int) else 0, key=f"flag_init_{f_id}")
+                    else:
+                        e_val = st.text_input("初始值", value=str(cur_val), key=f"flag_init_{f_id}")
 
-            # 1-G-7: 自動產生 ID (依據說明)
-            if not f_id_input:
-                final_f_id = _make_unique_id(f_desc, "flag_", "unnamed", existing_ids)
-            else:
-                final_f_id = f_id_input
+                    e_desc = st.text_input("說明", value=f["description"], key=f"flag_desc_{f_id}")
 
-            valid = True
-            if not final_f_id:
-                st.error("無法產生有效的 Flag ID，請手動輸入")
-                valid = False
-            elif not re.match(r"^[a-z][a-z0-9_]*$", final_f_id):
-                st.error(f"Flag ID 格式錯誤: {final_f_id}")
-                valid = False
-            elif final_f_id in existing_ids:
-                st.error(f"Flag ID 已存在: {final_f_id}")
-                valid = False
+                    col_save, col_cancel, _ = st.columns([1, 1, 4])
+                    with col_save:
+                        if st.button("儲存修改", key=f"flag_save_{f_id}"):
+                            f["type"] = e_type
+                            f["initial_value"] = e_val
+                            f["description"] = e_desc
+                            st.rerun()
+                    with col_cancel:
+                        if st.button("取消", key=f"flag_cancel_{f_id}"):
+                            _purge_flag_state(f_id)
+                            st.rerun()
+            with c2:
+                if st.button("刪除", key=f"flag_del_{f_id}"):
+                    ref_msgs = []
+                    for e in st.session_state.get("endings", []):
+                        if any(_has_flag_reference(cond, f_id) for cond in e.get("required_flags", [])):
+                            ref_msgs.append(f"結局 {e['ending_id']} (required_flags)")
+                        if any(_has_flag_reference(cond, f_id) for cond in e.get("forbidden_flags", [])):
+                            ref_msgs.append(f"結局 {e['ending_id']} (forbidden_flags)")
+                    for ch in st.session_state.get("characters", []):
+                        for sch in ch.get("schedule", []):
+                            if any(_has_flag_reference(cond, f_id) for cond in sch.get("condition", [])):
+                                ref_msgs.append(f"角色 {ch['character_id']} 行程 {sch['schedule_id']}")
+                    if ref_msgs:
+                        st.toast(f"無法刪除：被 {'、'.join(ref_msgs)} 引用", icon="🚨")
+                    else:
+                        st.session_state["flags"].pop(i)
+                        _purge_flag_state(f_id)
+                        st.rerun()
 
-            if valid:
-                # 依據選擇的型別強制轉型初始值
-                val = f_val
-                if f_type == "boolean":
-                    val = f_val.lower() == "true"
-                elif f_type == "integer":
-                    try:
-                        val = int(f_val)
-                    except ValueError:
-                        val = 0
+    st.markdown("---")
+    st.markdown("**[新增 Flag]**")
+    f_id_input = st.text_input("Flag ID (英文，留空則依說明自動產生)", key="add_f_id")
+    f_type = st.selectbox("型別", ["boolean", "integer", "string", "enum"], key="add_f_type")
 
-                st.session_state["flags"].append({
-                    "flag_id": final_f_id, "type": f_type,
-                    "initial_value": val, "description": f_desc,
-                })
-                if not f_id_input:
-                    st.caption(f"已自動產生 ID: `{final_f_id}`")
-                st.rerun()
+    # Initialize add_f_val if not present
+    if "add_f_val" not in st.session_state:
+        st.session_state["add_f_val"] = "false"
+    f_val = st.text_input("初始值", key="add_f_val")
+    f_desc = st.text_input("說明", key="add_f_desc")
+
+    if st.button("新增 Flag"):
+        existing_ids = _collect_existing_ids()
+        if not f_id_input:
+            final_f_id = _make_unique_id(f_desc, "flag_", "unnamed", existing_ids)
+        else:
+            final_f_id = f_id_input
+
+        valid = True
+        if not final_f_id:
+            st.error("無法產生有效的 Flag ID，請手動輸入")
+            valid = False
+        elif not re.match(r"^[a-z][a-z0-9_]*$", final_f_id):
+            st.error(f"Flag ID 格式錯誤: {final_f_id}")
+            valid = False
+        elif final_f_id in existing_ids:
+            st.error(f"Flag ID 已存在: {final_f_id}")
+            valid = False
+
+        if valid:
+            val = f_val
+            if f_type == "boolean":
+                val = f_val.lower() == "true"
+            elif f_type == "integer":
+                try: val = int(f_val)
+                except ValueError: val = 0
+
+            st.session_state["flags"].append({
+                "flag_id": final_f_id, "type": f_type,
+                "initial_value": val, "description": f_desc,
+            })
+            for k in ["add_f_id", "add_f_type", "add_f_val", "add_f_desc"]:
+                if k in st.session_state: del st.session_state[k]
+            st.rerun()
 
     # --- Status Flags (狀態效果) ---
     st.subheader("狀態旗標 (Status Flags)")
+
+    dur_type_map = {
+        "time_slots": "時段數(time_slots)",
+        "days": "天數(days)",
+        "until_event": "直到事件(until_event)",
+        "until_cleared": "直到解除(until_cleared)",
+        "permanent": "永久(permanent)"
+    }
+
     if st.session_state["status_flags"]:
-        for sf in st.session_state["status_flags"]:
-            st.write(f"• {sf['status_id']} — {sf['description']}")
+        for i, sf in enumerate(list(st.session_state["status_flags"])):
+            sf_id = sf["status_id"]
 
-    with st.form("add_status_flag", clear_on_submit=True):
-        sf_id_input = st.text_input("Status ID (英文，留空則依顯示名稱產生)", key="add_sf_id")
-        sf_label = st.text_input("顯示名稱")
-        sf_target = st.text_input("作用對象", "protagonist")
-        sf_effect_key = st.text_input("效果 key (例: block_time_slot)")
-        sf_effect_val = st.text_input("效果 value (例: evening)")
-        sf_dur_type = st.selectbox("持續類型", ["time_slots", "days", "until_event", "until_cleared", "permanent"])
-        sf_dur_val = st.number_input("持續值", value=1)
-        # 解除條件必須多選，且若是 permanent 仍需要合理設定或保留為空 (依 schema 而定)
-        sf_clear = st.multiselect("解除條件", ["on_time_advance", "on_day_end", "on_rest", "on_item_used",
-                                                "on_event_result", "on_location_visit", "manual_only"])
-        sf_desc = st.text_input("說明")
-        sf_perm_reason = st.text_input("永久原因（若 permanent）", "")
+            tgt_display = []
+            for t in sf.get("targets", []):
+                if t == "protagonist": tgt_display.append("主角")
+                else:
+                    ch = next((c for c in st.session_state.get("characters", []) if c["character_id"] == t), None)
+                    tgt_display.append(ch["display_name"] if ch else t)
+            t_str = "、".join(tgt_display) if tgt_display else "(無)"
 
-        if st.form_submit_button("新增 Status Flag"):
-            existing_ids = _collect_existing_ids()
+            d_str = dur_type_map.get(sf.get("duration", {}).get("type"), "unknown")
+            c_str = "、".join(sf.get("clear_rule", [])) if sf.get("clear_rule") else "(無)"
 
-            # 1-G-7: 自動產生 ID (依據顯示名稱)
-            if not sf_id_input:
-                final_sf_id = _make_unique_id(sf_label, "status_", "unnamed", existing_ids)
-            else:
-                final_sf_id = sf_id_input
+            label = f"{sf.get('label') or sf_id} · {t_str} · {d_str} · {c_str}"
 
-            valid = True
-            if not final_sf_id:
-                st.error("無法產生有效的 Status ID，請手動輸入")
-                valid = False
-            elif not re.match(r"^[a-z][a-z0-9_]*$", final_sf_id):
-                st.error(f"Status ID 格式錯誤: {final_sf_id}")
-                valid = False
-            elif final_sf_id in existing_ids:
-                st.error(f"Status ID 已存在: {final_sf_id}")
-                valid = False
+            c1, c2 = st.columns([5, 1], vertical_alignment="center")
+            with c1:
+                with st.expander(label):
+                    st.markdown("**[基本資訊]**")
+                    st.text(f"狀態 ID (唯讀): {sf_id}")
+                    e_label = st.text_input("顯示名稱", value=sf.get("label", ""), key=f"status_label_{sf_id}")
 
-            if valid:
-                entry = {
-                    "status_id": final_sf_id, "label": sf_label, "target": sf_target,
-                    "effect": [{sf_effect_key: sf_effect_val}] if sf_effect_key else [],
-                    "duration": {"type": sf_dur_type, "value": sf_dur_val if sf_dur_type != "permanent" else None},
-                    "clear_rule": sf_clear, "description": sf_desc,
-                }
-                if sf_perm_reason:
-                    entry["permanent_reason"] = sf_perm_reason
-                st.session_state["status_flags"].append(entry)
-                if not sf_id_input:
-                    st.caption(f"已自動產生 ID: `{final_sf_id}`")
-                st.rerun()
+                    tgt_options_full = _status_targets_options(st.session_state.get("characters", []), sf.get("targets", []))
+                    tgt_options_ids = [t[1] for t in tgt_options_full]
+                    def format_tgt(tid, opts=tgt_options_full):
+                        return next((t[0] for t in opts if t[1] == tid), tid)
+
+                    e_targets = st.multiselect("作用對象", tgt_options_ids, default=sf.get("targets", []), format_func=format_tgt, key=f"status_targets_{sf_id}")
+                    e_desc = st.text_input("說明", value=sf.get("description", ""), key=f"status_desc_{sf_id}")
+
+                    st.markdown("**[效果]**")
+                    try:
+                        effect_yaml_str = yaml.safe_dump(sf.get("effect", []), allow_unicode=True, sort_keys=False)
+                    except Exception:
+                        effect_yaml_str = "[]\n"
+                    e_effect = st.text_area("effect YAML (list of dict)", value=effect_yaml_str, key=f"status_effect_{sf_id}")
+
+                    st.markdown("**[生命週期]**")
+                    e_dur_type = st.selectbox("持續類型", list(dur_type_map.keys()), index=list(dur_type_map.keys()).index(sf["duration"]["type"]), format_func=lambda x: dur_type_map[x], key=f"status_durtype_{sf_id}")
+                    st.caption("時段數/天數: 經過指定數量後解除。直到事件/直到解除: 不需填寫數值。永久: 長期狀態，需填永久原因。")
+
+                    if e_dur_type in ("time_slots", "days"):
+                        e_dur_val = st.number_input("持續值", value=sf["duration"]["value"] if sf["duration"]["value"] is not None else 1, min_value=1, key=f"status_durval_{sf_id}")
+                    else:
+                        e_dur_val = None
+
+                    clear_rule_opts = ["on_time_advance", "on_day_end", "on_rest", "on_item_used", "on_event_result", "on_location_visit", "manual_only"]
+                    e_clear = st.multiselect("解除條件", clear_rule_opts, default=sf.get("clear_rule", []), key=f"status_clear_{sf_id}")
+
+                    if e_dur_type == "permanent":
+                        e_perm = st.text_input("永久原因 (必填)", value=sf.get("permanent_reason", ""), key=f"status_perm_{sf_id}")
+                    else:
+                        e_perm = ""
+
+                    col_save, col_cancel, _ = st.columns([1, 1, 4])
+                    with col_save:
+                        if st.button("儲存修改", key=f"status_save_{sf_id}"):
+                            valid = True
+                            if not e_targets:
+                                st.error("作用對象不可為空")
+                                valid = False
+
+                            parsed_effect = []
+                            try:
+                                parsed_effect = _parse_effect_yaml(e_effect)
+                            except ValueError as ve:
+                                st.error(str(ve))
+                                valid = False
+                            except Exception:
+                                st.error("effect YAML 解析失敗")
+                                valid = False
+
+                            if e_dur_type != "permanent" and not e_clear:
+                                st.error("非永久狀態必須設定解除條件")
+                                valid = False
+                            if e_dur_type == "permanent" and not e_perm:
+                                st.error("永久狀態必須填寫永久原因")
+                                valid = False
+                            if e_dur_type != "permanent" and e_clear == ["manual_only"]:
+                                st.warning("注意：解除條件只有 manual_only")
+
+                            if valid:
+                                sf["label"] = e_label
+                                sf["targets"] = e_targets
+                                sf["description"] = e_desc
+                                sf["effect"] = parsed_effect
+                                sf["duration"] = {"type": e_dur_type, "value": e_dur_val}
+                                sf["clear_rule"] = e_clear
+                                sf["permanent_reason"] = e_perm if e_dur_type == "permanent" else None
+                                st.rerun()
+
+                    with col_cancel:
+                        if st.button("取消", key=f"status_cancel_{sf_id}"):
+                            _purge_status_state(sf_id)
+                            st.rerun()
+            with c2:
+                if st.button("刪除", key=f"status_del_{sf_id}"):
+                    ref_msgs = []
+                    for e in st.session_state.get("endings", []):
+                        if any(_has_status_reference(cond, sf_id) for cond in e.get("required_stats", [])):
+                            ref_msgs.append(f"結局 {e['ending_id']} (required_stats)")
+                    for ch in st.session_state.get("characters", []):
+                        for sch in ch.get("schedule", []):
+                            if any(_has_status_reference(cond, sf_id) for cond in sch.get("condition", [])):
+                                ref_msgs.append(f"角色 {ch['character_id']} 行程 {sch['schedule_id']}")
+                    if ref_msgs:
+                        st.toast(f"無法刪除：被 {'、'.join(ref_msgs)} 引用", icon="🚨")
+                    else:
+                        st.session_state["status_flags"].pop(i)
+                        _purge_status_state(sf_id)
+                        st.rerun()
+
+    st.markdown("---")
+    st.markdown("**[新增 Status Flag]**")
+    sf_id_input = st.text_input("Status ID (英文，留空則依顯示名稱產生)", key="add_sf_id")
+    sf_label = st.text_input("顯示名稱", key="add_sf_label")
+
+    tgt_options_full = _status_targets_options(st.session_state.get("characters", []), [])
+    tgt_options_ids = [t[1] for t in tgt_options_full]
+    def format_tgt_add(tid):
+        return next((t[0] for t in tgt_options_full if t[1] == tid), tid)
+
+    if "add_sf_targets" not in st.session_state:
+        st.session_state["add_sf_targets"] = ["protagonist"]
+    sf_targets = st.multiselect("作用對象", tgt_options_ids, format_func=format_tgt_add, key="add_sf_targets")
+
+    if "add_sf_effect" not in st.session_state:
+        st.session_state["add_sf_effect"] = "- block_time_slot: evening"
+    sf_effect = st.text_area("effect YAML (list of dict)", key="add_sf_effect")
+
+    sf_dur_type = st.selectbox("持續類型", list(dur_type_map.keys()), format_func=lambda x: dur_type_map[x], key="add_sf_dur_type")
+    st.caption("時段數/天數: 經過指定數量後解除。直到事件/直到解除: 不需填寫數值。永久: 長期狀態，需填永久原因。")
+
+    if sf_dur_type in ("time_slots", "days"):
+        if "add_sf_dur_val" not in st.session_state:
+            st.session_state["add_sf_dur_val"] = 1
+        sf_dur_val = st.number_input("持續值", min_value=1, key="add_sf_dur_val")
+    else:
+        sf_dur_val = None
+
+    sf_clear = st.multiselect("解除條件", ["on_time_advance", "on_day_end", "on_rest", "on_item_used",
+                                            "on_event_result", "on_location_visit", "manual_only"], key="add_sf_clear")
+    sf_desc = st.text_input("說明", key="add_sf_desc")
+
+    if sf_dur_type == "permanent":
+        sf_perm_reason = st.text_input("永久原因（若 permanent）", key="add_sf_perm_reason")
+    else:
+        sf_perm_reason = ""
+
+    if st.button("新增 Status Flag"):
+        existing_ids = _collect_existing_ids()
+        if not sf_id_input:
+            final_sf_id = _make_unique_id(sf_label, "status_", "unnamed", existing_ids)
+        else:
+            final_sf_id = sf_id_input
+
+        valid = True
+        if not final_sf_id:
+            st.error("無法產生有效的 Status ID，請手動輸入")
+            valid = False
+        elif not re.match(r"^[a-z][a-z0-9_]*$", final_sf_id):
+            st.error(f"Status ID 格式錯誤: {final_sf_id}")
+            valid = False
+        elif final_sf_id in existing_ids:
+            st.error(f"Status ID 已存在: {final_sf_id}")
+            valid = False
+
+        if not sf_targets:
+            st.error("作用對象不可為空")
+            valid = False
+
+        parsed_effect = []
+        try:
+            parsed_effect = _parse_effect_yaml(sf_effect)
+            if not isinstance(parsed_effect, list) or not parsed_effect:
+                 # Let _parse_effect_yaml handle validation, but ensure it's not empty if we want to enforce it.
+                 # The inline check does not strictly enforce non-empty if parsing succeeds as empty list, but the issue says "effect 必須 parse 成非空 list[dict]". Wait, let me check _parse_effect_yaml or just add a check here.
+                 if not parsed_effect:
+                     st.error("effect YAML 不可為空")
+                     valid = False
+        except ValueError as ve:
+            st.error(str(ve))
+            valid = False
+        except Exception:
+            st.error("effect YAML 解析失敗")
+            valid = False
+
+        if sf_dur_type != "permanent" and not sf_clear:
+            st.error("非永久狀態必須設定解除條件")
+            valid = False
+        if sf_dur_type == "permanent" and not sf_perm_reason:
+            st.error("永久狀態必須填寫永久原因")
+            valid = False
+        if sf_dur_type != "permanent" and sf_clear == ["manual_only"]:
+            st.warning("注意：解除條件只有 manual_only")
+
+        if valid:
+            entry = {
+                "status_id": final_sf_id, "label": sf_label, "targets": sf_targets,
+                "effect": parsed_effect,
+                "duration": {"type": sf_dur_type, "value": sf_dur_val},
+                "clear_rule": sf_clear, "description": sf_desc,
+            }
+            if sf_dur_type == "permanent" and sf_perm_reason:
+                entry["permanent_reason"] = sf_perm_reason
+            st.session_state["status_flags"].append(entry)
+            for k in ["add_sf_id", "add_sf_label", "add_sf_targets", "add_sf_effect", "add_sf_dur_type", "add_sf_dur_val", "add_sf_clear", "add_sf_desc", "add_sf_perm_reason"]:
+                if k in st.session_state: del st.session_state[k]
+            st.rerun()
 
     _next_page_button(PAGE_LABELS[4])
 

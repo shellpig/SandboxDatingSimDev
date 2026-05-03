@@ -23,6 +23,8 @@ def apply_common_mocks(mock_st):
     mock_st.columns.side_effect = lambda x, **kwargs: [MagicMock() for _ in range(len(x))] if isinstance(x, list) else [MagicMock() for _ in range(x)]
     mock_st.button.return_value = False
     mock_st.text_input.side_effect = lambda label, value="", **kwargs: mock_st.session_state.get(kwargs.get("key"), value)
+    # text_area 必須回傳 str（default value），否則 _tab_flags 會把 MagicMock 餵進 yaml.safe_load 造成 PyYAML Reader 死迴圈
+    mock_st.text_area.side_effect = lambda label, value="", **kwargs: mock_st.session_state.get(kwargs.get("key"), value)
     mock_st.selectbox.side_effect = lambda label, options, **kwargs: options[0] if options else None
     mock_st.multiselect.side_effect = lambda label, options, **kwargs: kwargs.get("default", [])
     mock_st.form_submit_button.return_value = False
@@ -73,7 +75,7 @@ def test_1g7_auto_id_flag_from_desc(mock_st):
     mock_st.session_state.update({
         "add_f_id": "", 
     })
-    mock_st.form_submit_button.return_value = True
+    mock_st.button.side_effect = lambda label, *args, **kwargs: label == "新增 Flag"
     
     # 說明欄位在 Flag 表單沒有 key，我們透過 label 攔截
     def mock_text_input(label, value="", **kwargs):
@@ -135,7 +137,8 @@ def test_1g7_auto_id_status_flag(mock_st):
     mock_st.session_state.update({
         "add_sf_id": "",
     })
-    mock_st.form_submit_button.return_value = True
+    mock_st.button.side_effect = lambda label, *args, **kwargs: label == "新增 Status Flag"
+    mock_st.multiselect.side_effect = lambda label, options, **kwargs: ["protagonist", "on_time_advance"]
     
     def mock_text_input(label, value="", **kwargs):
         if label == "顯示名稱": return "過勞"
@@ -144,6 +147,6 @@ def test_1g7_auto_id_status_flag(mock_st):
 
     _tab_flags()
 
+    print("ST ERROR CALLS:", mock_st.error.call_args_list)
     assert len(mock_st.session_state["status_flags"]) == 1
     assert mock_st.session_state["status_flags"][0]["status_id"] == "status_guo_lao"
-

@@ -1,6 +1,6 @@
 from typing import Any, Literal
 from datetime import date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sandbox_dating_sim.schema.validation import ValidationReport
 
 LocationType = Literal["container", "sub_location", "standalone"]
@@ -104,12 +104,23 @@ class StatusDuration(BaseModel):
 class StatusFlag(BaseModel):
     status_id: str
     label: str
-    target: str
+    targets: list[str] = Field(min_length=1)
     effect: list[dict[str, Any]]
     duration: StatusDuration
     clear_rule: list[ClearRule]
     description: str
     permanent_reason: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_target(cls, data):
+        """相容舊格式：把 target: str 轉成 targets: [str]"""
+        if not isinstance(data, dict):
+            return data
+        if "targets" not in data and "target" in data:
+            target = data.pop("target")
+            data["targets"] = [target] if isinstance(target, str) and target else []
+        return data
 
 class Ending(BaseModel):
     ending_id: str

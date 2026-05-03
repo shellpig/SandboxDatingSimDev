@@ -134,7 +134,7 @@ class UIWLinter:
             _check(status.status_id, f"status_flags[{i}].status_id", "Status Flag")
         for i, end in enumerate(package.endings):
             _check(end.ending_id, f"endings[{i}].ending_id", "Ending")
-        
+
         return issues
 
     def _check_locations(self, package: SetupPackage) -> list[Issue]:
@@ -175,10 +175,10 @@ class UIWLinter:
                     path=f"locations[{i}].available_time_slots",
                     message=f"可進入地點 {loc.location_id} 至少需要一個 time_slot。"
                 ))
-            
+
             if loc.location_type == "container":
                 sub_locations = [
-                    sub for sub in package.locations 
+                    sub for sub in package.locations
                     if sub.parent_location_id == loc.location_id and sub.is_visitable
                 ]
                 if not sub_locations:
@@ -276,7 +276,7 @@ class UIWLinter:
         issues = []
         loc_ids = {loc.location_id for loc in package.locations}
         time_slots = set(package.world.time_slots)
-        
+
         for i, char in enumerate(package.characters):
             schedule_map = {}
             for j, sch in enumerate(char.schedule):
@@ -287,7 +287,7 @@ class UIWLinter:
                         path=f"characters[{i}].schedule[{j}].location_id",
                         message=f"行程引用了不存在的地點：{sch.location_id}。"
                     ))
-                
+
                 if sch.time_slot not in time_slots:
                     issues.append(Issue(
                         severity="error",
@@ -315,6 +315,8 @@ class UIWLinter:
 
     def _check_status_flags(self, package: SetupPackage) -> list[Issue]:
         issues = []
+        allowed_targets = {"protagonist"} | {char.character_id for char in package.characters}
+
         for i, status in enumerate(package.status_flags):
             if not status.effect:
                 issues.append(Issue(
@@ -323,7 +325,33 @@ class UIWLinter:
                     path=f"status_flags[{i}].effect",
                     message=f"狀態旗標 {status.status_id} 的 effect 不可為空。"
                 ))
-            if not status.clear_rule:
+
+            if not status.targets:
+                issues.append(Issue(
+                    severity="error",
+                    type="empty_status_targets",
+                    path=f"status_flags[{i}].targets",
+                    message=f"狀態旗標 {status.status_id} 的 targets 不可為空。"
+                ))
+            else:
+                for j, tgt in enumerate(status.targets):
+                    if tgt not in allowed_targets:
+                        issues.append(Issue(
+                            severity="error",
+                            type="unknown_status_target",
+                            path=f"status_flags[{i}].targets[{j}]",
+                            message=f"狀態旗標 {status.status_id} 的 targets 引用了不存在的對象：{tgt}。"
+                        ))
+
+            if status.duration.type in ("until_event", "until_cleared") and status.duration.value is not None:
+                issues.append(Issue(
+                    severity="warning",
+                    type="unexpected_duration_value",
+                    path=f"status_flags[{i}].duration.value",
+                    message=f"狀態旗標 {status.status_id} 的 duration.type={status.duration.type} 不需要 value，請留空。"
+                ))
+
+            if status.duration.type != "permanent" and not status.clear_rule:
                 issues.append(Issue(
                     severity="error",
                     type="empty_clear_rule",
@@ -360,7 +388,7 @@ class UIWLinter:
                     path=f"endings[{i}].target_character_id",
                     message=f"結局引用了不存在的對象角色：{end.target_character_id}。"
                 ))
-            
+
             def check_flags(flag_list, path_prefix):
                 for j, req_flag in enumerate(flag_list):
                     match = re.match(r"^flag\.([a-zA-Z0-9_]+)\s*==", req_flag)
@@ -373,7 +401,7 @@ class UIWLinter:
                                 path=f"{path_prefix}[{j}]",
                                 message=f"結局條件引用了未宣告的旗標：{fid}。"
                             ))
-            
+
             check_flags(end.required_flags, f"endings[{i}].required_flags")
             check_flags(end.forbidden_flags, f"endings[{i}].forbidden_flags")
         return issues

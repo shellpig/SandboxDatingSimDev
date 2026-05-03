@@ -19,10 +19,10 @@ def test_parse_exported_markdown_roundtrip():
     pkg_in = load_yaml("setup_minimal.yaml")
     exporter = SetupPackageExporter()
     md = exporter.to_markdown(pkg_in)
-    
+
     parser = SetupPackageParser()
     pkg_out = parser.parse_markdown(md)
-    
+
     assert pkg_out.world.world_id == pkg_in.world.world_id
     assert pkg_out.world.title == pkg_in.world.title
     assert pkg_out.protagonist.name == pkg_in.protagonist.name
@@ -46,10 +46,10 @@ def test_roundtrip_preserves_nested_locations_and_schedule():
     pkg_in = load_yaml("setup_minimal.yaml")
     exporter = SetupPackageExporter()
     md = exporter.to_markdown(pkg_in)
-    
+
     parser = SetupPackageParser()
     pkg_out = parser.parse_markdown(md)
-    
+
     assert len(pkg_out.locations) == len(pkg_in.locations)
     assert pkg_out.locations[0].location_id == pkg_in.locations[0].location_id
     assert pkg_out.characters[0].schedule[0].schedule_id == pkg_in.characters[0].schedule[0].schedule_id
@@ -60,10 +60,10 @@ def test_roundtrip_preserves_status_flag_lifecycle():
     pkg_in = load_yaml("setup_minimal.yaml")
     exporter = SetupPackageExporter()
     md = exporter.to_markdown(pkg_in)
-    
+
     parser = SetupPackageParser()
     pkg_out = parser.parse_markdown(md)
-    
+
     status_in = pkg_in.status_flags[0]
     status_out = pkg_out.status_flags[0]
     assert status_out.duration.type == status_in.duration.type
@@ -76,10 +76,10 @@ def test_roundtrip_preserves_asset_vocabularies_and_aliases():
     pkg_in = load_yaml("setup_minimal.yaml")
     exporter = SetupPackageExporter()
     md = exporter.to_markdown(pkg_in)
-    
+
     parser = SetupPackageParser()
     pkg_out = parser.parse_markdown(md)
-    
+
     assert pkg_out.asset_vocabularies == pkg_in.asset_vocabularies
     assert pkg_out.alias_tables == pkg_in.alias_tables
 
@@ -114,3 +114,10 @@ def test_roundtrip_preserves_semantic_choice_labels():
     ):
         assert t_out.id == t_in.id
         assert t_out.label == t_in.label
+
+def test_legacy_status_target_normalization(tmp_path):
+    """測試 parse setup_legacy_status_target.yaml 時，target: str 自動正規化為 targets: [str]。"""
+    pkg = load_yaml("setup_legacy_status_target.yaml")
+    status = pkg.status_flags[0]
+    assert status.targets == ["protagonist"]
+    assert not hasattr(status, "target") or status.target is None

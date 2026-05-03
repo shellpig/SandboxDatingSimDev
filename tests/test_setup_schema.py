@@ -45,7 +45,7 @@ def test_status_flag_requires_duration_and_clear_rule():
         StatusFlag(
             status_id="tired",
             label="疲勞",
-            target="protagonist",
+            targets=["protagonist"],
             effect=[{"stat.CHA": -10}],
             clear_rule=["on_rest"],
             description="tired"
@@ -54,7 +54,7 @@ def test_status_flag_requires_duration_and_clear_rule():
         StatusFlag(
             status_id="tired",
             label="疲勞",
-            target="protagonist",
+            targets=["protagonist"],
             effect=[{"stat.CHA": -10}],
             duration={"type": "days", "value": 1},
             description="tired"

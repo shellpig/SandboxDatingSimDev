@@ -192,7 +192,7 @@ def test_linter_rejects_duplicate_status_id():
     pkg.status_flags.append(StatusFlag(
         status_id="sophie",
         label="過勞",
-        target="protagonist",
+        targets=["protagonist"],
         effect=[{"block_time_slot": "evening"}],
         duration=StatusDuration(type="days", value=1),
         clear_rule=["on_rest"],
@@ -212,7 +212,7 @@ def test_linter_rejects_invalid_status_id_format():
     pkg.status_flags.append(StatusFlag(
         status_id="Status-123",
         label="過勞",
-        target="protagonist",
+        targets=["protagonist"],
         effect=[{"block_time_slot": "evening"}],
         duration=StatusDuration(type="days", value=1),
         clear_rule=["on_rest"],
@@ -222,3 +222,38 @@ def test_linter_rejects_invalid_status_id_format():
     report = linter.validate(pkg)
     assert report.status == "failed"
     assert any(i.type == "invalid_id_format" for i in report.issues)
+
+def test_linter_status_targets_1g8():
+    from sandbox_dating_sim.schema.setup import StatusFlag, StatusDuration
+    pkg = load_yaml("setup_minimal.yaml")
+
+    # 測試 unknown_status_target
+    pkg.status_flags.append(StatusFlag(
+        status_id="unknown_target_test",
+        label="測試",
+        targets=["unknown_id"],
+        effect=[{"block_time_slot": "evening"}],
+        duration=StatusDuration(type="days", value=1),
+        clear_rule=["on_rest"],
+        description="..."
+    ))
+
+    # 測試 unexpected_duration_value
+    pkg.status_flags.append(StatusFlag(
+        status_id="unexpected_duration",
+        label="測試",
+        targets=["protagonist"],
+        effect=[{"block_time_slot": "evening"}],
+        duration=StatusDuration(type="until_event", value=3),
+        clear_rule=["on_rest"],
+        description="..."
+    ))
+
+    report = UIWLinter().validate(pkg)
+    unknown = [i for i in report.issues if i.type == "unknown_status_target"]
+    assert len(unknown) == 1
+    assert "unknown_id" in unknown[0].message
+
+    unexpected = [i for i in report.issues if i.type == "unexpected_duration_value"]
+    assert len(unexpected) == 1
+    assert unexpected[0].severity == "warning"

@@ -123,8 +123,7 @@ flags:
 status_flags:
   - status_id: overworked
     label: 過勞
-    targets:
-      - protagonist
+    target: protagonist
     effect:
       - block_time_slot: evening
     duration:
