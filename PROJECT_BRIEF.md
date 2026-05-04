@@ -23,17 +23,36 @@
 src/sandbox_dating_sim/
 ├── core/          constants.py, exceptions.py, ids.py（ID 驗證、slugify、自動 ID）
 ├── schema/        setup.py（SetupPackage Pydantic models）, validation.py
+│                  blueprint.py（Phase 2 待建：EventBlueprint models）
 ├── uiw/           linter.py（UIW Linter）, defaults.py（UI 預設選項）, helpers.py（純函式）
 ├── pipeline/      setup_exporter.py, setup_parser.py, markdown.py
+│                  blueprint_parser.py（Phase 2 待建）
+├── prompts/       blueprint_prompt.py（Phase 2 待建：Prompt Builder）
+├── validation/    blueprint_linter.py（Phase 2 待建：Blueprint Linter）
+├── walkthrough/   blueprint_walkthrough.py, checkpoint.py, route_graph.py（Phase 2 待建）
 ├── ui/            streamlit_uiw.py（Interactive UIW Prototype）
 └── cli.py
 
 tests/
 ├── fixtures/      setup_minimal.yaml, setup_legacy_status_target.yaml, ...
+│                  blueprint_minimal.md, blueprint_invalid_*.md（Phase 2 待建）
 ├── test_setup_schema.py, test_uiw_linter.py, test_setup_exporter.py
 ├── test_setup_parser.py, test_streamlit_uiw.py, test_cli.py
 ├── test_ids.py, test_uiw_defaults.py
 ├── test_uiw_1g7.py, test_uiw_1g8.py, test_uiw_1g9.py
+├── test_blueprint_schema.py, test_blueprint_prompt.py（Phase 2 待建）
+├── test_blueprint_parser.py, test_blueprint_linter.py（Phase 2 待建）
+├── test_blueprint_walkthrough.py, test_blueprint_checkpoint.py（Phase 2 待建）
+├── test_blueprint_route_graph.py（Phase 2 待建）
+
+outputs/                     （Phase 2 固定輸出布局）
+  <world_id>/
+    setup_package/           <world_id>_setup_package.md
+    prompts/                 <world_id>_event_blueprint_prompt.md
+    event_blueprints/        <world_id>_event_blueprint.md
+    walkthrough_checkpoints/ <world_id>_event_blueprint/
+                               cp_YYYYMMDD_HHMMSS.yaml
+    route_graphs/            <world_id>_event_blueprint_graph.md
 ```
 
 ## 核心設計原則
@@ -42,13 +61,24 @@ tests/
 2. **ID 規則**：`^[a-z][a-z0-9_]*$`，UI 顯示中文但 canonical data 一律英文 ID。
 3. **文件格式**：Markdown 外殼 + 單一 YAML code block。`model_dump(mode="json", exclude_none=True)`。
 4. **1-G-7 自動 ID**：`_slugify_label`（中文轉拼音）→ `_make_unique_id`（prefix + suffix 避重），保留手動輸入。
-5. **Phase 1 不呼叫外部 AI API**。
+5. **Phase 1 & 2 不呼叫外部 AI API**。Phase 2 透過 prompt `.md` 讓使用者手動交給外部 AI，再由本地工具驗證結果。
+6. **Phase 2 strict DSL**：conditions / results 維持 `list[str]`，但必須符合可解析嚴格 DSL。只支援 boolean flags、六項 stats（INT/CHA/STR/MORAL/Cash/Debt）、`character.<id>.favor`、`status.<target>.<status_id>` active/inactive。不支援 item/inventory。ending 全部由 event result 顯式觸發。
 
-## Schema 主要模型（setup.py）
+## Schema 主要模型
+
+### setup.py（Phase 1）
 
 SetupPackage 包含：World、Protagonist、Location[]、Character[]（含 ScheduleEntry[]）、FlagDef[]、StatusFlag[]、Ending[]、asset_vocabularies、alias_tables、validation_report。
 
 關鍵 Literal 型別：DayType、TimeSlot、SchedulePriority、FlagType、DurationType、ClearRule、Gender、Orientation、EventPriority。
+
+### blueprint.py（Phase 2，待實作）
+
+EventBlueprint 包含：blueprint_id、source_world_id、source_setup_package、initial_event_id、events: BlueprintEvent[]、new_flags_proposed: FlagDef[]。
+
+BlueprintEvent 包含：event_id、title、scene_summary、location_id、time_slot、priority（BlueprintPriority）、repeat_policy（RepeatPolicy: once/daily）、route_tags、conditions、event_purpose、cast、expected_assets（ExpectedAssets）、choices: BlueprintChoice[]（1-4）、time_cost。
+
+BlueprintChoice 包含：choice_id、choice_label、choice_intent、result: list[str]（恰好一個 goto/ending 流程出口）。
 
 ## Phase 進度
 
@@ -70,22 +100,29 @@ SetupPackage 包含：World、Protagonist、Location[]、Character[]（含 Sched
 | 1-G-7 | ✅ 完成 | 自動產生唯一 canonical ID |
 | 1-G-8 | ✅ 大致完成 | 旗標/狀態頁 inline 編輯、targets 複選（UI 測試仍有缺口） |
 | 1-G-9 | ✅ 完成 | ScheduleEntry `specific_date` + `schedule_id` 自動生成 |
-| 2 | 未開始 | Event Blueprint MVP（schema, prompt builder, parser, linter） |
+| 2 | 規格已確定，待實作 | Event Blueprint MVP（2-A-0 Setup Prerequisites, 2-A Schema, 2-B Prompt Builder, 2-C Parser + Linter, 2-D Logic Walkthrough） |
 | 3 | 未開始 | Map Manager, Status Manager, Route Validator |
 | 4-7 | 未開始 | Scene Draft, Dashboard, AI Provider, 資產管理 |
 
 ## 當前待辦
 
-見 `已知問題.md`（~170 行，每次必讀）。
+見 `已知問題.md`（~320 行，每次必讀）。
 
-重點：
+主線：Phase 2 Event Blueprint MVP（規格已確定 2026-05-04，全部待實作）。
+
+Phase 2 子階段：
+- **2-A-0 Setup Prerequisites**：`protagonist_home` 必備地點、`export-setup` 預設輸出到 `outputs/<world_id>/setup_package/`、同名檔不覆寫。
+- **2-A Event Blueprint Schema**：`schema/blueprint.py`，EventBlueprint / BlueprintEvent / BlueprintChoice Pydantic models，Markdown shell + exactly one YAML code block。
+- **2-B Blueprint Prompt Builder**：`prompts/blueprint_prompt.py`，章節化 Markdown prompt document，三種 scope（minimal_complete / ai_decides / custom），CLI 互動式。
+- **2-C Blueprint Parser + Linter**：`pipeline/blueprint_parser.py` + `validation/blueprint_linter.py`，雙層驗證（blueprint-only / full with SetupPackage），嚴格 DSL。
+- **2-D Blueprint Logic Walkthrough**：`walkthrough/` 模組，純函式 engine + CLI 薄殼，time progression、location unlock/closed、status duration、repeat once/daily、critical 遮蔽、checkpoint、Mermaid route graph。
+
+其他待辦：
 - 1-G-8 UI 行為測試覆蓋不足（已補強，待完整手動驗收）。
-- 1-G-9 已完成並驗證通過（`tests/ -m "not integration"`：131 passed）。
-- 下一主線：Phase 2 Event Blueprint MVP。
 
 ## 規格文件索引
 
-### 開發設計方針.md（~3265 行）
+### 開發設計方針.md（~4280 行）
 
 | 區段 | 行範圍 | 何時讀 |
 |:---|:---|:---|
@@ -105,11 +142,18 @@ SetupPackage 包含：World、Protagonist、Location[]、Character[]（含 Sched
 | 1-G-6 結局頁 | 2189-2378 | 修改結局相關 |
 | 1-G-7 自動 ID | 2379-2464 | 修改 ID 生成相關 |
 | 1-G-8 旗標/狀態 | 2465-2789 | 修改 flag/status 相關 |
-| **1-G-9 specific_date + schedule_id** | **2790-2930** | **修改 Character/Schedule 或回歸 1-G-9 時** |
-| Phase 2 Event Blueprint | 2932-2936 | 進入 Phase 2 時 |
-| Phase 3-7 | 3038-3198 | 遠期參考 |
+| 1-G-9 specific_date + schedule_id | 2790-2930 | 修改 Character/Schedule 或回歸 1-G-9 時 |
+| **Phase 2 總論 + 2-A-0 Setup Prerequisites** | **2934-3033** | **Phase 2 實作前必讀** |
+| **2-A Event Blueprint Schema** | **3035-3193** | **實作 blueprint.py 時** |
+| **Phase 2 DSL（condition + result + flags/stats/status）** | **3195-3361** | **實作 linter / walkthrough DSL 解析時** |
+| **location unlock/closed + ending + direct goto 規則** | **3363-3439** | **實作 linter ending 檢查 / walkthrough goto 時** |
+| **time cost + critical event + assets/cast 規則** | **3441-3502** | **實作 walkthrough time/priority 時** |
+| **2-B Blueprint Prompt Builder** | **3504-3603** | **實作 prompt builder 時** |
+| **2-C Blueprint Parser + Linter** | **3605-3704** | **實作 parser / linter 時** |
+| **2-D Blueprint Logic Walkthrough** | **3706-4049** | **實作 walkthrough / checkpoint / graph 時** |
+| Phase 3-7 | 4051-4280+ | 遠期參考 |
 
-### 測試指南.md（~1420 行）
+### 測試指南.md（~1770 行）
 
 | 區段 | 行範圍 | 何時讀 |
 |:---|:---|:---|
@@ -120,8 +164,15 @@ SetupPackage 包含：World、Protagonist、Location[]、Character[]（含 Sched
 | 1-G-3 ~ 1-G-6 測試 | 601-991 | 修改對應功能時 |
 | 1-G-7 自動 ID 測試 | 992-1092 | 修改 ID 生成時 |
 | 1-G-8 旗標/狀態測試 | 1093-1239 | 修改 flag/status 時 |
-| **1-G-9 測試** | **1240-1342** | **修改 Character/Schedule 或回歸 1-G-9 時** |
+| 1-G-9 測試 | 1240-1342 | 修改 Character/Schedule 或回歸 1-G-9 時 |
 | Phase 1 全階段回歸 | 1345-1371 | Phase 完成後回歸 |
+| **Phase 2 測試總論** | **1374-1382** | **Phase 2 實作前必讀** |
+| **2-A-0 Setup Prerequisites 測試** | **1384-1419** | **實作 protagonist_home / output layout 時** |
+| **2-A Blueprint Schema 測試** | **1422-1456** | **實作 blueprint.py 時** |
+| **2-B Prompt Builder 測試** | **1459-1495** | **實作 prompt builder 時** |
+| **2-C Parser + Linter 測試** | **1498-1600** | **實作 parser / linter 時** |
+| **2-D Walkthrough 測試** | **1603-1706** | **實作 walkthrough / checkpoint / graph 時** |
+| **Phase 2 後續回歸** | **1709-1730** | **Phase 2 子階段完成後** |
 
 ### Sandbox_Dating_Sim_Dev_正式規格_v1.2.md（~1020 行）
 

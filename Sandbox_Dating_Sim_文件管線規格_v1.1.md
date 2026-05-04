@@ -4,6 +4,7 @@
 
 | 版本 | 日期 | 內容 |
 | :--- | :--- | :--- |
+| v1.4 | 2026-05-04 | 對齊開發設計方針 Phase 2 最終規格：更新 Event Blueprint 範例，補齊 `blueprint_id`、`source_world_id`、`initial_event_id`、`new_flags_proposed`、`scene_summary`、`choice_label`、`expected_assets`、`event_purpose`、`cast`、`time_cost`、`repeat_policy`；修正 `source_setup_package` 命名格式。 |
 | v1.3 | 2026-05-01 | 明確規定 Setup Package 中沒有秘密時使用 `secrets: []`；`none = 沒有秘密` 只屬 UI 操作，不輸出給 AI 作為秘密語意。 |
 | v1.2 | 2026-05-01 | 對齊 UIW Phase 1-G-3：Setup Package 語意型欄位改為保存 `id + label`，讓 AI 能讀取中文語意，系統仍使用英文 canonical ID。 |
 | v1.1 | 2026-04-27 | 將 Setup Package 範例中的 `uiw_version` 統一為 `1.2`，對齊 UIW 初始設定 v1.2。 |
@@ -205,15 +206,20 @@ Event Blueprint 不應產出：
 
 ```yaml
 event_blueprint_version: 1.0
-source_setup_package: summer_city_2026_setup.md
+blueprint_id: summer_city_2026_event_blueprint
+source_world_id: summer_city_2026
+source_setup_package: summer_city_2026_setup_package.md
 target_game_spec_version: 1.2
+initial_event_id: opening_001
 
 events:
   - event_id: sophie_park_001
     title: 公園偶遇
+    scene_summary: 主角在公園偶遇蘇菲，她首次透露家庭壓力。
     location_id: central_park
     time_slot: afternoon
     priority: route
+    repeat_policy: once
     route_tags:
       - character_route:sophie
       - ending_prerequisite
@@ -233,19 +239,31 @@ events:
           position: center
     choices:
       - choice_id: listen_quietly
+        choice_label: 靜靜傾聽
         choice_intent: 溫柔傾聽
         result:
           - character.sophie.favor += 5
           - flag.sophie_trust_started = true
-          - goto: free_roam
+          - "goto: free_roam"
 
       - choice_id: make_joke
+        choice_label: 開玩笑緩和
         choice_intent: 用玩笑緩和氣氛
         result:
           - character.sophie.favor += 1
           - flag.sophie_teased_at_park = true
-          - goto: free_roam
+          - "goto: free_roam"
     time_cost: 1
+
+new_flags_proposed:
+  - flag_id: sophie_trust_started
+    type: boolean
+    initial_value: false
+    description: 蘇菲信任路線開始
+  - flag_id: sophie_teased_at_park
+    type: boolean
+    initial_value: false
+    description: 在公園開過蘇菲玩笑
 ```
 ````
 
