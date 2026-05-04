@@ -100,7 +100,7 @@ BlueprintChoice 包含：choice_id、choice_label、choice_intent、result: list
 | 1-G-7 | ✅ 完成 | 自動產生唯一 canonical ID |
 | 1-G-8 | ✅ 大致完成 | 旗標/狀態頁 inline 編輯、targets 複選（UI 測試仍有缺口） |
 | 1-G-9 | ✅ 完成 | ScheduleEntry `specific_date` + `schedule_id` 自動生成 |
-| 2 | 規格已確定，待實作 | Event Blueprint MVP（2-A-0 Setup Prerequisites, 2-A Schema, 2-B Prompt Builder, 2-C Parser + Linter, 2-D Logic Walkthrough） |
+| 2 | 實作中 (2-A~2-C 已完成) | Event Blueprint MVP（2-A-0 Setup Prerequisites, 2-A Schema, 2-B Prompt Builder, 2-C Parser + Linter, 2-D Logic Walkthrough） |
 | 3 | 未開始 | Map Manager, Status Manager, Route Validator |
 | 4-7 | 未開始 | Scene Draft, Dashboard, AI Provider, 資產管理 |
 
@@ -108,13 +108,13 @@ BlueprintChoice 包含：choice_id、choice_label、choice_intent、result: list
 
 見 `已知問題.md`（~320 行，每次必讀）。
 
-主線：Phase 2 Event Blueprint MVP（規格已確定 2026-05-04，全部待實作）。
+主線：Phase 2 Event Blueprint MVP（規格已確定 2026-05-04，2-A 至 2-C 已實作，2-D 待實作）。
 
 Phase 2 子階段：
-- **2-A-0 Setup Prerequisites**：`protagonist_home` 必備地點、`export-setup` 預設輸出到 `outputs/<world_id>/setup_package/`、同名檔不覆寫。
-- **2-A Event Blueprint Schema**：`schema/blueprint.py`，EventBlueprint / BlueprintEvent / BlueprintChoice Pydantic models，Markdown shell + exactly one YAML code block。
-- **2-B Blueprint Prompt Builder**：`prompts/blueprint_prompt.py`，章節化 Markdown prompt document，三種 scope（minimal_complete / ai_decides / custom），CLI 互動式。
-- **2-C Blueprint Parser + Linter**：`pipeline/blueprint_parser.py` + `validation/blueprint_linter.py`，雙層驗證（blueprint-only / full with SetupPackage），嚴格 DSL。
+- **2-A-0 Setup Prerequisites**：(✅ 已完成) `protagonist_home` 必備地點、`export-setup` 預設輸出到 `outputs/<world_id>/setup_package/`、同名檔不覆寫。
+- **2-A Event Blueprint Schema**：(✅ 已完成) `schema/blueprint.py`，EventBlueprint / BlueprintEvent / BlueprintChoice Pydantic models，Markdown shell + exactly one YAML code block。
+- **2-B Blueprint Prompt Builder**：(✅ 已完成) `prompts/blueprint_prompt.py`，章節化 Markdown prompt document，三種 scope（minimal_complete / ai_decides / custom），CLI 互動式。
+- **2-C Blueprint Parser + Linter**：(✅ 已完成) `pipeline/blueprint_parser.py` + `validation/blueprint_linter.py`，雙層驗證（blueprint-only / full with SetupPackage），嚴格 DSL。
 - **2-D Blueprint Logic Walkthrough**：`walkthrough/` 模組，純函式 engine + CLI 薄殼，time progression、location unlock/closed、status duration、repeat once/daily、critical 遮蔽、checkpoint、Mermaid route graph。
 
 其他待辦：
