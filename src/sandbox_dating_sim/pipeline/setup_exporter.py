@@ -35,11 +35,29 @@ class SetupPackageExporter:
     def write_file(self, package: SetupPackage, output_dir: Path) -> Path:
         """
         輸出檔名：<world_id>_setup_package.md
+        若目標檔案已存在則拋 FileExistsError（不覆寫）。
         回傳寫入路徑。
         """
         output_dir.mkdir(parents=True, exist_ok=True)
         content = self.to_markdown(package)
         filename = f"{package.world.world_id}_setup_package.md"
         filepath = output_dir / filename
+        if filepath.exists():
+            raise FileExistsError(
+                f"目標檔案已存在，拒絕覆寫：{filepath}\n"
+                "請手動刪除或重新命名後再匯出。"
+            )
         filepath.write_text(content, encoding="utf-8")
         return filepath
+
+    def write_file_default_path(self, package: SetupPackage, outputs_root: Path | None = None) -> Path:
+        """
+        使用 Phase 2 固定輸出布局：
+          outputs/<world_id>/setup_package/<world_id>_setup_package.md
+        若 outputs_root 為 None，預設使用當前工作目錄下的 outputs/。
+        目標檔案已存在時拋 FileExistsError（不覆寫）。
+        """
+        root = outputs_root or Path("outputs")
+        world_id = package.world.world_id
+        output_dir = root / world_id / "setup_package"
+        return self.write_file(package, output_dir)

@@ -34,6 +34,28 @@ protagonist:
   secrets: []
 
 locations:
+  - location_id: protagonist_home
+    name: 主角家
+    location_type: standalone
+    parent_location_id: null
+    is_visitable: true
+    base_cost: 0
+    available_time_slots:
+      - morning
+      - afternoon
+      - evening
+    tags:
+      - system
+      - home
+      - rest
+      - private
+    unlock_conditions: []
+    closed_conditions: []
+    map_priority: normal
+    map_display_group: null
+    default_npc_capacity: 0
+    empty_behavior: allow_rest
+
   - location_id: school
     name: 學校
     location_type: container

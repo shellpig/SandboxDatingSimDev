@@ -142,6 +142,30 @@ class UIWLinter:
     def _check_locations(self, package: SetupPackage) -> list[Issue]:
         issues = []
         loc_map = {loc.location_id: loc for loc in package.locations}
+        world_time_slots = list(package.world.time_slots)
+        world_time_slots_set = set(world_time_slots)
+
+        # 2-A-0: protagonist_home 必備
+        if "protagonist_home" not in loc_map:
+            issues.append(Issue(
+                severity="error",
+                type="missing_protagonist_home",
+                path="locations",
+                message="Setup Package 缺少必備地點 protagonist_home。"
+            ))
+        else:
+            home = loc_map["protagonist_home"]
+            # 2-A-0: protagonist_home 時段必須等於 world.time_slots
+            if list(home.available_time_slots) != world_time_slots:
+                issues.append(Issue(
+                    severity="error",
+                    type="invalid_protagonist_home_time_slots",
+                    path="locations[protagonist_home].available_time_slots",
+                    message=(
+                        f"protagonist_home.available_time_slots 必須等於 world.time_slots {world_time_slots}，"
+                        f"目前為 {list(home.available_time_slots)}。"
+                    )
+                ))
 
         for i, loc in enumerate(package.locations):
             if loc.location_type == "sub_location":
@@ -177,6 +201,19 @@ class UIWLinter:
                     path=f"locations[{i}].available_time_slots",
                     message=f"可進入地點 {loc.location_id} 至少需要一個 time_slot。"
                 ))
+
+            # 2-A-0: 每個 location 的 available_time_slots 必須是 world.time_slots 子集
+            for slot in loc.available_time_slots:
+                if slot not in world_time_slots_set:
+                    issues.append(Issue(
+                        severity="error",
+                        type="invalid_location_time_slot",
+                        path=f"locations[{i}].available_time_slots",
+                        message=(
+                            f"地點 {loc.location_id} 使用了不在 world.time_slots 中的時間段：{slot}。"
+                        )
+                    ))
+                    break  # 同一地點只報一次
 
             if loc.location_type == "container":
                 sub_locations = [

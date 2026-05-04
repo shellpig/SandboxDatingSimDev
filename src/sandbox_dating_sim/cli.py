@@ -22,10 +22,13 @@ def main() -> None:
 @app.command("export-setup")
 def export_setup(
     input_yaml: Path = typer.Argument(..., help="輸入的 YAML 初始設定檔路徑。"),
-    out: Path = typer.Option(Path("examples"), "--out", help="輸出目錄。"),
+    out: Path = typer.Option(None, "--out", help="自訂輸出目錄（省略時使用預設 outputs/<world_id>/setup_package/）。"),
 ) -> None:
     """
     讀取 YAML 初始設定，驗證後輸出 Setup Package MD。
+
+    預設輸出路徑：outputs/<world_id>/setup_package/<world_id>_setup_package.md
+    若目標檔案已存在則報錯，不覆寫。
     """
     if not input_yaml.exists():
         console.print(f"[red]錯誤：找不到檔案 {input_yaml}[/red]")
@@ -45,7 +48,17 @@ def export_setup(
         raise typer.Exit(code=1)
 
     exporter = SetupPackageExporter()
-    filepath = exporter.write_file(package, out)
+
+    try:
+        if out is not None:
+            # 進階：使用者指定目錄，同樣防覆寫
+            filepath = exporter.write_file(package, out)
+        else:
+            # 預設：Phase 2 固定輸出布局
+            filepath = exporter.write_file_default_path(package)
+    except FileExistsError as e:
+        console.print(f"[red]錯誤：{e}[/red]")
+        raise typer.Exit(code=1)
 
     # 顯示驗證結果
     report = exporter.linter.validate(package)

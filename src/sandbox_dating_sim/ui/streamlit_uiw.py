@@ -60,6 +60,37 @@ def _purge_ending_state(ending_id: str) -> None:
         del st.session_state[k]
 
 
+def _default_protagonist_home(time_slots: list[str] | None = None) -> dict:
+    """回傳 protagonist_home 的預設 dict，時段跟 world.time_slots 同步。"""
+    slots = time_slots if time_slots else ["morning", "afternoon", "evening"]
+    return {
+        "location_id": "protagonist_home",
+        "name": "主角家",
+        "location_type": "standalone",
+        "parent_location_id": None,
+        "is_visitable": True,
+        "base_cost": 0,
+        "available_time_slots": slots,
+        "tags": ["system", "home", "rest", "private"],
+        "unlock_conditions": [],
+        "closed_conditions": [],
+        "map_priority": "normal",
+        "map_display_group": None,
+        "default_npc_capacity": 0,
+        "empty_behavior": "allow_rest",
+        "ambient_text": None,
+    }
+
+
+def _ensure_protagonist_home() -> None:
+    """確保 locations 中存在 protagonist_home（系統必備地點）。"""
+    locs = st.session_state.get("locations", [])
+    if not any(l["location_id"] == "protagonist_home" for l in locs):
+        time_slots = ["morning", "afternoon", "evening"]
+        home = _default_protagonist_home(time_slots)
+        st.session_state["locations"] = [home] + locs
+
+
 def _init_state():
     """
     初始化 Streamlit session_state 中的預設資料結構。
@@ -83,6 +114,8 @@ def _init_state():
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+    # 2-A-0: 確保 protagonist_home 存在
+    _ensure_protagonist_home()
 
 
 
@@ -412,8 +445,11 @@ def _tab_locations():
                     with st.expander(label):
                         st.json(loc)
             with c2:
-                if st.button("刪除", key=f"del_loc_{i}"):
-                    loc_id = loc["location_id"]
+                loc_id = loc["location_id"]
+                if loc_id == "protagonist_home":
+                    # 2-A-0: protagonist_home 不可刪除
+                    st.caption("系統必備地點")
+                elif st.button("刪除", key=f"del_loc_{i}"):
                     has_subs = [l["location_id"] for l in st.session_state["locations"] if l.get("parent_location_id") == loc_id]
                     if has_subs:
                         st.toast(f"無法刪除：仍有子地點引用此地點 ({', '.join(has_subs)})", icon="🚨")
