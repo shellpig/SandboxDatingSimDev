@@ -1,0 +1,56 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.13, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\User\OneDrive\桌面\AI_Work\ProjectGpt\SandboxDatingSimDev\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\User\OneDrive\桌面\AI_Work\ProjectGpt\SandboxDatingSimDev
+configfile: pyproject.toml
+collecting ... collected 10 items
+
+tests/test_blueprint_walkthrough.py::test_walkthrough_engine PASSED      [ 10%]
+tests/test_blueprint_walkthrough.py::test_checkpoint_and_graph PASSED    [ 20%]
+tests/test_blueprint_walkthrough.py::test_engine_time_progression PASSED [ 30%]
+tests/test_blueprint_walkthrough.py::test_engine_choice_override_time PASSED [ 40%]
+tests/test_blueprint_walkthrough.py::test_engine_state_deltas FAILED     [ 50%]
+tests/test_blueprint_walkthrough.py::test_engine_status_duration FAILED  [ 60%]
+tests/test_blueprint_walkthrough.py::test_engine_location_conditions PASSED [ 70%]
+tests/test_blueprint_walkthrough.py::test_engine_repeat_policy FAILED    [ 80%]
+tests/test_blueprint_walkthrough.py::test_engine_critical_events FAILED  [ 90%]
+tests/test_blueprint_walkthrough.py::test_engine_dead_end_and_blocked PASSED [100%]
+
+================================== FAILURES ===================================
+__________________________ test_engine_state_deltas ___________________________
+tests\test_blueprint_walkthrough.py:155: in test_engine_state_deltas
+    assert state.stats.get("Cash", 0) == 0 # 100 - 100
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: assert 2900 == 0
+E    +  where 2900 = <built-in method get of dict object at 0x00000158D9B4C840>('Cash', 0)
+E    +    where <built-in method get of dict object at 0x00000158D9B4C840> = {'CHA': 6, 'Cash': 2900, 'Debt': 50000, 'INT': 5, ...}.get
+E    +      where {'CHA': 6, 'Cash': 2900, 'Debt': 50000, 'INT': 5, ...} = WalkthroughState(mode='free_roam', current_date=datetime.date(2026, 4, 27), current_time_slot='afternoon', current_location_id='protagonist_home', current_event_id=None, flags={'sophie_route_started': False, 'some_flag': True}, stats={'INT': 5, 'CHA': 6, 'STR': 4, 'MORAL': 5, 'Cash': 2900, 'Debt': 50000}, character_favor={'sophie': 5}, active_statuses={}, event_visit_log={'ev_start': [datetime.date(2026, 4, 27)]}, blocked_reason=None, day_number=1).stats
+_________________________ test_engine_status_duration _________________________
+tests\test_blueprint_walkthrough.py:160: in test_engine_status_duration
+    dummy_setup.status_flags.append(StatusFlag.model_validate({
+E   pydantic_core._pydantic_core.ValidationError: 3 validation errors for StatusFlag
+E   label
+E     Field required [type=missing, input_value={'status_id': 'tired', 't..._rule': ['manual_only']}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/missing
+E   effect
+E     Field required [type=missing, input_value={'status_id': 'tired', 't..._rule': ['manual_only']}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/missing
+E   description
+E     Field required [type=missing, input_value={'status_id': 'tired', 't..._rule': ['manual_only']}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/missing
+__________________________ test_engine_repeat_policy __________________________
+tests\test_blueprint_walkthrough.py:223: in test_engine_repeat_policy
+    assert "visited (once)" in state.blocked_reason
+E   assert 'visited (once)' in "goto 'ev_start' time_slot mismatch. Expected morning, got afternoon"
+E    +  where "goto 'ev_start' time_slot mismatch. Expected morning, got afternoon" = WalkthroughState(mode='blocked', current_date=datetime.date(2026, 4, 27), current_time_slot='afternoon', current_location_id='protagonist_home', current_event_id=None, flags={'sophie_route_started': False}, stats={'INT': 5, 'CHA': 6, 'STR': 4, 'MORAL': 5, 'Cash': 3000, 'Debt': 50000}, character_favor={'sophie': 0}, active_statuses={}, event_visit_log={'ev_start': [datetime.date(2026, 4, 27)]}, blocked_reason="goto 'ev_start' time_slot mismatch. Expected morning, got afternoon", day_number=1).blocked_reason
+_________________________ test_engine_critical_events _________________________
+tests\test_blueprint_walkthrough.py:245: in test_engine_critical_events
+    assert len(avail["protagonist_home"]) == 1
+E   AssertionError: assert 2 == 1
+E    +  where 2 = len([{'choices': [BlueprintChoice(choice_id='ch1', choice_label='End', choice_intent='End', result=['ending: sophie_good_ending'])], 'event': BlueprintEvent(event_id='ev_end', title='End', scene_summary='sum', location_id='protagonist_home', time_slot='morning', priority='critical', repeat_policy='once', route_tags=['fallback_ending'], conditions=[], event_purpose='End', cast=[], expected_assets=ExpectedAssets(background=None, bgm=None, characters=[]), choices=[BlueprintChoice(choice_id='ch1', choice_label='End', choice_intent='End', result=['ending: sophie_good_ending'])], time_cost=1)}, {'choices': [BlueprintChoice(choice_id='ch1', choice_label='Go', choice_intent='Go', result=['goto: free_roam'])], 'event': BlueprintEvent(event_id='ev_crit', title='Start', scene_summary='sum', location_id='protagonist_home', time_slot='morning', priority='critical', repeat_policy='once', route_tags=[], conditions=[], event_purpose='Start', cast=[], expected_assets=ExpectedAssets(background=None, bgm=None, characters=[]), choices=[BlueprintChoice(choice_id='ch1', choice_label='Go', choice_intent='Go', result=['goto: free_roam'])], time_cost=1)}])
+=========================== short test summary info ===========================
+FAILED tests/test_blueprint_walkthrough.py::test_engine_state_deltas - Assert...
+FAILED tests/test_blueprint_walkthrough.py::test_engine_status_duration - pyd...
+FAILED tests/test_blueprint_walkthrough.py::test_engine_repeat_policy - asser...
+FAILED tests/test_blueprint_walkthrough.py::test_engine_critical_events - Ass...
+========================= 4 failed, 6 passed in 0.31s =========================

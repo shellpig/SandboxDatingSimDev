@@ -271,6 +271,206 @@ def validate_blueprint(
     raise typer.Exit(code=code)
 
 
+@app.command("walkthrough-blueprint")
+def walkthrough_blueprint(
+    outputs_root: Path = typer.Option(Path("outputs"), "--outputs-root"),
+) -> None:
+    """互動式執行 Event Blueprint 邏輯推演。"""
+    from sandbox_dating_sim.pipeline.blueprint_parser import BlueprintParser
+    from sandbox_dating_sim.pipeline.setup_parser import SetupPackageParser
+    from sandbox_dating_sim.validation.blueprint_linter import BlueprintLinter
+    from sandbox_dating_sim.walkthrough.blueprint_walkthrough import (
+        create_initial_walkthrough_state, enter_event, list_available_events,
+        list_available_actions, apply_choice, apply_action
+    )
+    from sandbox_dating_sim.walkthrough.checkpoint import make_checkpoint, dump_checkpoint, load_checkpoint
+    from sandbox_dating_sim.walkthrough.route_graph import build_route_graph
+
+    if not outputs_root.exists():
+        console.print(f"[red]錯誤：找不到 {outputs_root}[/red]")
+        raise typer.Exit(code=1)
+
+    worlds = sorted([d for d in outputs_root.iterdir()
+                     if d.is_dir() and (d / "setup_package").exists()])
+    if not worlds:
+        console.print("[red]錯誤：找不到任何含 setup_package/ 的 world 目錄。[/red]")
+        raise typer.Exit(code=1)
+
+    console.print("[bold]可用 World：[/bold]")
+    for i, w in enumerate(worlds):
+        console.print(f"  [{i+1}] {w.name}")
+    idx = typer.prompt("選 World 編號", type=int) - 1
+    world_dir = worlds[idx]
+    world_id = world_dir.name
+
+    setup_files = sorted((world_dir / "setup_package").glob("*_setup_package.md"))
+    console.print(f"\n[bold]可用 Setup Package：[/bold]")
+    for i, f in enumerate(setup_files):
+        console.print(f"  [{i+1}] {f.name}")
+    sidx = typer.prompt("選 Setup Package 編號", type=int) - 1
+    setup_file = setup_files[sidx]
+
+    blueprint_path = world_dir / "event_blueprints" / f"{world_id}_event_blueprint.md"
+    
+    setup_pkg = SetupPackageParser().parse_file(setup_file)
+    blueprint = BlueprintParser().parse_file(blueprint_path)
+    report = BlueprintLinter().validate(setup_pkg, blueprint)
+    if report.status == "failed":
+        console.print("[red]Blueprint Validation Failed. Cannot start walkthrough.[/red]")
+        raise typer.Exit(code=1)
+
+    start_mode = typer.prompt("Select start mode (1: beginning, 2: checkpoint)", default="1")
+    state = None
+    history = []
+    start_state_checkpoint = None
+
+    if start_mode == "2":
+        cp_dir = world_dir / "walkthrough_checkpoints" / f"{world_id}_event_blueprint"
+        if cp_dir.exists():
+            cps = sorted(cp_dir.glob("*.yaml"))
+            for i, c in enumerate(cps):
+                console.print(f"  [{i+1}] {c.name}")
+            cidx = typer.prompt("Select checkpoint", type=int) - 1
+            cp_content = cps[cidx].read_text(encoding="utf-8")
+            cp = load_checkpoint(cp_content)
+            state = cp.state
+            history = cp.history
+            start_state_checkpoint = state.model_copy(deep=True)
+        else:
+            console.print("No checkpoints found.")
+            raise typer.Exit(code=1)
+    else:
+        state = create_initial_walkthrough_state(setup_pkg, blueprint)
+        enter_event(setup_pkg, blueprint, state, blueprint.initial_event_id)
+
+    test_mode = typer.prompt("Select test mode (1: omniscient, 2: normal)", default="1")
+    normal_selected_location = None
+    
+    while True:
+        if state.mode == "ending_reached":
+            console.print("[green]Ending Reached![/green]")
+        elif state.mode == "dead_end":
+            console.print(f"[yellow]Dead End: {state.blocked_reason}[/yellow]")
+        elif state.mode == "blocked":
+            console.print(f"[red]Blocked: {state.blocked_reason}[/red]")
+            
+        console.print(f"\n=== {state.current_date} {state.current_time_slot} @ {state.current_location_id} ===")
+        
+        lookup = {}
+        if state.mode == "in_event":
+            ev = next((e for e in blueprint.events if e.event_id == state.current_event_id), None)
+            if ev:
+                console.print(f"[bold]Event: {ev.title}[/bold]")
+                for i, ch in enumerate(ev.choices):
+                    console.print(f"  [{i+1}] {ch.choice_label}")
+                    lookup[str(i+1)] = ("choice", ch.choice_id)
+        elif state.mode == "free_roam":
+            avail_evs = list_available_events(setup_pkg, blueprint, state)
+            avail_acts = list_available_actions(setup_pkg, state)
+            
+            idx = 1
+            if test_mode == "1":
+                # Omniscient mode
+                for loc, evs in avail_evs.items():
+                    console.print(f"[[{loc}]]")
+                    for e in evs:
+                        ev = e["event"]
+                        console.print(f"  [{idx}] Event: {ev.title}")
+                        lookup[str(idx)] = ("event", ev.event_id)
+                        idx += 1
+                for loc, acts in avail_acts.items():
+                    if acts:
+                        console.print(f"[[{loc}]]")
+                        for a in acts:
+                            console.print(f"  [{idx}] Action: {a}")
+                            lookup[str(idx)] = ("action", a, loc)
+                            idx += 1
+            else:
+                # Normal mode
+                if normal_selected_location is None:
+                    locs = set(list(avail_evs.keys()) + list(avail_acts.keys()))
+                    console.print("[bold]Available Locations:[/bold]")
+                    for loc in sorted(list(locs)):
+                        console.print(f"  [{idx}] Location: {loc}")
+                        lookup[str(idx)] = ("location", loc)
+                        idx += 1
+                else:
+                    loc = normal_selected_location
+                    console.print(f"[bold]Location: {loc}[/bold]")
+                    if loc in avail_evs:
+                        for e in avail_evs[loc]:
+                            ev = e["event"]
+                            console.print(f"  [{idx}] Event: {ev.title}")
+                            lookup[str(idx)] = ("event", ev.event_id)
+                            idx += 1
+                    if loc in avail_acts:
+                        for a in avail_acts[loc]:
+                            console.print(f"  [{idx}] Action: {a}")
+                            lookup[str(idx)] = ("action", a, loc)
+                            idx += 1
+                    console.print(f"  [0] Back to locations")
+                    lookup["0"] = ("back",)
+
+        cmd = typer.prompt("Command (<number>, s/save, state, history, graph, restart, q/quit)")
+        
+        if cmd in ("q", "quit"):
+            break
+        elif cmd in ("s", "save"):
+            if state.mode == "in_event":
+                console.print("Cannot save inside an event.")
+                continue
+            lbl = typer.prompt("Checkpoint label", default="")
+            cp = make_checkpoint(state, history, world_id, blueprint.blueprint_id, lbl if lbl else None)
+            out_dir = world_dir / "walkthrough_checkpoints" / f"{world_id}_event_blueprint"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{cp.checkpoint_id}.yaml"
+            out_path.write_text(dump_checkpoint(cp), encoding="utf-8")
+            console.print(f"Saved checkpoint to {out_path}")
+        elif cmd == "graph":
+            g = build_route_graph(blueprint)
+            out_dir = world_dir / "route_graphs"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{world_id}_event_blueprint_graph.md"
+            if out_path.exists():
+                console.print("Graph already exists. Not overwriting.")
+            else:
+                out_path.write_text(g, encoding="utf-8")
+                console.print(f"Saved graph to {out_path}")
+        elif cmd == "state":
+            console.print(f"Mode: {state.mode}, Date: {state.current_date}, Slot: {state.current_time_slot}")
+            console.print(f"Flags: {[k for k,v in state.flags.items() if v]}")
+            console.print(f"Stats: {state.stats}")
+            console.print(f"Favor: {state.character_favor}")
+            console.print(f"Active Statuses: {state.active_statuses}")
+        elif cmd == "history":
+            for h in history:
+                console.print(f"{h.date} {h.time_slot} {h.kind} {h.event_id} {h.choice_id} {h.ending_id}")
+        elif cmd == "restart":
+            if start_state_checkpoint is not None:
+                state = start_state_checkpoint.model_copy(deep=True)
+            else:
+                state = create_initial_walkthrough_state(setup_pkg, blueprint)
+                enter_event(setup_pkg, blueprint, state, blueprint.initial_event_id)
+            history = []
+            normal_selected_location = None
+            continue
+        else:
+            if cmd in lookup:
+                tup = lookup[cmd]
+                if tup[0] == "choice":
+                    apply_choice(setup_pkg, blueprint, state, state.current_event_id, tup[1], history)
+                elif tup[0] == "event":
+                    enter_event(setup_pkg, blueprint, state, tup[1])
+                    normal_selected_location = None
+                elif tup[0] == "action":
+                    state.current_location_id = tup[2]
+                    apply_action(setup_pkg, blueprint, state, tup[1], history)
+                    normal_selected_location = None
+                elif tup[0] == "location":
+                    normal_selected_location = tup[1]
+                elif tup[0] == "back":
+                    normal_selected_location = None
+
 def _print_report(report) -> None:
     if report.status == "passed":
         console.print("[green]✅ passed[/green]")
