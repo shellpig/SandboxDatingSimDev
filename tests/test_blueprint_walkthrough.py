@@ -201,6 +201,7 @@ def test_engine_status_duration(dummy_setup, dummy_blueprint):
     assert "protagonist" not in state.active_statuses # sick removed and protagonist dict removed
 
 def test_engine_location_conditions(dummy_setup, dummy_blueprint):
+    dummy_setup.locations[1].is_visitable = True
     dummy_setup.locations[1].unlock_conditions = ["flag.unlocked == true", "stat.Cash >= 100"]
     dummy_setup.locations[1].closed_conditions = ["flag.banned == true"]
     

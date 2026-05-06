@@ -1,5 +1,5 @@
 import yaml
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 
 from sandbox_dating_sim.walkthrough.blueprint_walkthrough import WalkthroughState, HistoryEntry
@@ -15,7 +15,7 @@ class Checkpoint(BaseModel):
     history: list[HistoryEntry]
 
 def make_checkpoint(state: WalkthroughState, history: list[HistoryEntry], source_world_id: str, blueprint_id: str, label: str | None = None) -> Checkpoint:
-    now = datetime.now()
+    now = datetime.now(timezone.utc).astimezone()
     ts = now.strftime("%Y%m%d_%H%M%S")
     return Checkpoint(
         checkpoint_id=f"cp_{ts}",

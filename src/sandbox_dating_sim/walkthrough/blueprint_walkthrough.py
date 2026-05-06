@@ -344,6 +344,8 @@ def is_location_available(setup: SetupPackage, state: WalkthroughState, location
     loc = next((l for l in setup.locations if l.location_id == location_id), None)
     if not loc:
         return False
+    if not loc.is_visitable:
+        return False
     if state.current_time_slot not in loc.available_time_slots:
         return False
     
@@ -407,6 +409,14 @@ def list_available_events(setup: SetupPackage, bp: EventBlueprint, state: Walkth
     critical_cands = [c for c in candidates if c["event"].priority == "critical"]
     if critical_cands:
         candidates = critical_cands
+
+    priority_order = {"critical": 0, "main": 1, "route": 2, "normal": 3, "ambient": 4}
+    repeat_order = {"once": 0, "daily": 1}
+    candidates.sort(key=lambda c: (
+        priority_order.get(c["event"].priority, 99),
+        repeat_order.get(c["event"].repeat_policy, 99),
+        c["event"].event_id
+    ))
         
     res = {}
     for c in candidates:

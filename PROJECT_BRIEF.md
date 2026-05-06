@@ -2,7 +2,7 @@
 
 本文件供新 session 快速了解專案全貌，取代逐份閱讀全部規格文件。需要深入某區段時，按行號索引讀取對應文件。
 
-最後更新：2026-05-04
+最後更新：2026-05-06
 
 ---
 
@@ -23,27 +23,27 @@
 src/sandbox_dating_sim/
 ├── core/          constants.py, exceptions.py, ids.py（ID 驗證、slugify、自動 ID）
 ├── schema/        setup.py（SetupPackage Pydantic models）, validation.py
-│                  blueprint.py（Phase 2 待建：EventBlueprint models）
+│                  blueprint.py（EventBlueprint models）
 ├── uiw/           linter.py（UIW Linter）, defaults.py（UI 預設選項）, helpers.py（純函式）
 ├── pipeline/      setup_exporter.py, setup_parser.py, markdown.py
-│                  blueprint_parser.py（Phase 2 待建）
-├── prompts/       blueprint_prompt.py（Phase 2 待建：Prompt Builder）
-├── validation/    blueprint_linter.py（Phase 2 待建：Blueprint Linter）
-├── walkthrough/   blueprint_walkthrough.py, checkpoint.py, route_graph.py（Phase 2 待建）
+│                  blueprint_parser.py
+├── prompts/       blueprint_prompt.py（Prompt Builder）
+├── validation/    blueprint_linter.py（Blueprint Linter）
+├── walkthrough/   blueprint_walkthrough.py, checkpoint.py, route_graph.py
 ├── ui/            streamlit_uiw.py（Interactive UIW Prototype）
 └── cli.py
 
 tests/
 ├── fixtures/      setup_minimal.yaml, setup_legacy_status_target.yaml, ...
-│                  blueprint_minimal.md, blueprint_invalid_*.md（Phase 2 待建）
+│                  blueprint_minimal.md, blueprint_invalid_*.md
 ├── test_setup_schema.py, test_uiw_linter.py, test_setup_exporter.py
 ├── test_setup_parser.py, test_streamlit_uiw.py, test_cli.py
 ├── test_ids.py, test_uiw_defaults.py
 ├── test_uiw_1g7.py, test_uiw_1g8.py, test_uiw_1g9.py
-├── test_blueprint_schema.py, test_blueprint_prompt.py（Phase 2 待建）
-├── test_blueprint_parser.py, test_blueprint_linter.py（Phase 2 待建）
-├── test_blueprint_walkthrough.py, test_blueprint_checkpoint.py（Phase 2 待建）
-├── test_blueprint_route_graph.py（Phase 2 待建）
+├── test_blueprint_schema.py, test_blueprint_prompt.py
+├── test_blueprint_parser.py, test_blueprint_linter.py
+├── test_blueprint_walkthrough.py, test_blueprint_checkpoint.py
+├── test_blueprint_route_graph.py
 
 outputs/                     （Phase 2 固定輸出布局）
   <world_id>/
@@ -72,7 +72,7 @@ SetupPackage 包含：World、Protagonist、Location[]、Character[]（含 Sched
 
 關鍵 Literal 型別：DayType、TimeSlot、SchedulePriority、FlagType、DurationType、ClearRule、Gender、Orientation、EventPriority。
 
-### blueprint.py（Phase 2，待實作）
+### blueprint.py（Phase 2）
 
 EventBlueprint 包含：blueprint_id、source_world_id、source_setup_package、initial_event_id、events: BlueprintEvent[]、new_flags_proposed: FlagDef[]。
 
@@ -98,24 +98,28 @@ BlueprintChoice 包含：choice_id、choice_label、choice_intent、result: list
 | 1-G-5 | ✅ 完成 | 角色清單、inline 編輯、行程管理 |
 | 1-G-6 | ✅ 完成 | 結局頁 inline 編輯、F-γ multiselect |
 | 1-G-7 | ✅ 完成 | 自動產生唯一 canonical ID |
-| 1-G-8 | ✅ 大致完成 | 旗標/狀態頁 inline 編輯、targets 複選（UI 測試仍有缺口） |
+| 1-G-8 | ✅ 大致完成 | 旗標/狀態頁 inline 編輯、targets 複選（完整手動驗收仍有缺口） |
 | 1-G-9 | ✅ 完成 | ScheduleEntry `specific_date` + `schedule_id` 自動生成 |
-| 2 | 實作中 (2-A~2-C 已完成) | Event Blueprint MVP（2-A-0 Setup Prerequisites, 2-A Schema, 2-B Prompt Builder, 2-C Parser + Linter, 2-D Logic Walkthrough） |
+| 2 | ✅ 完成 | Event Blueprint MVP（2-A-0 Setup Prerequisites, 2-A Schema, 2-B Prompt Builder, 2-C Parser + Linter, 2-D Logic Walkthrough） |
 | 3 | 未開始 | Map Manager, Status Manager, Route Validator |
 | 4-7 | 未開始 | Scene Draft, Dashboard, AI Provider, 資產管理 |
 
 ## 當前待辦
 
-見 `已知問題.md`（~320 行，每次必讀）。
+見 `已知問題.md`（每次必讀）。
 
-主線：Phase 2 Event Blueprint MVP（規格已確定 2026-05-04，2-A 至 2-C 已實作，2-D 待實作）。
+主線：Phase 2 Event Blueprint MVP 已完成並驗證通過。
+
+2026-05-06 驗證結果：
+- Phase 2 指定測試：`138 passed in 1.47s`。
+- 全專案非 integration 回歸：`269 passed in 2.14s`（Windows/OneDrive pytest temp 權限問題需用 `--basetemp` 並提升權限重跑）。
 
 Phase 2 子階段：
 - **2-A-0 Setup Prerequisites**：(✅ 已完成) `protagonist_home` 必備地點、`export-setup` 預設輸出到 `outputs/<world_id>/setup_package/`、同名檔不覆寫。
 - **2-A Event Blueprint Schema**：(✅ 已完成) `schema/blueprint.py`，EventBlueprint / BlueprintEvent / BlueprintChoice Pydantic models，Markdown shell + exactly one YAML code block。
 - **2-B Blueprint Prompt Builder**：(✅ 已完成) `prompts/blueprint_prompt.py`，章節化 Markdown prompt document，三種 scope（minimal_complete / ai_decides / custom），CLI 互動式。
 - **2-C Blueprint Parser + Linter**：(✅ 已完成) `pipeline/blueprint_parser.py` + `validation/blueprint_linter.py`，雙層驗證（blueprint-only / full with SetupPackage），嚴格 DSL。
-- **2-D Blueprint Logic Walkthrough**：`walkthrough/` 模組，純函式 engine + CLI 薄殼，time progression、location unlock/closed、status duration、repeat once/daily、critical 遮蔽、checkpoint、Mermaid route graph。
+- **2-D Blueprint Logic Walkthrough**：(✅ 已完成) `walkthrough/` 模組，純函式 engine + CLI 薄殼，time progression、location unlock/closed、status duration、repeat once/daily、critical 遮蔽、checkpoint、Mermaid route graph。
 
 其他待辦：
 - 1-G-8 UI 行為測試覆蓋不足（已補強，待完整手動驗收）。

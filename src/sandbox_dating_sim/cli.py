@@ -328,14 +328,27 @@ def walkthrough_blueprint(
         cp_dir = world_dir / "walkthrough_checkpoints" / f"{world_id}_event_blueprint"
         if cp_dir.exists():
             cps = sorted(cp_dir.glob("*.yaml"))
-            for i, c in enumerate(cps):
-                console.print(f"  [{i+1}] {c.name}")
-            cidx = typer.prompt("Select checkpoint", type=int) - 1
-            cp_content = cps[cidx].read_text(encoding="utf-8")
-            cp = load_checkpoint(cp_content)
-            state = cp.state
-            history = cp.history
-            start_state_checkpoint = state.model_copy(deep=True)
+            valid_cps = []
+            for cp_path in cps:
+                try:
+                    cp_content = cp_path.read_text(encoding="utf-8")
+                    cp = load_checkpoint(cp_content)
+                    if cp.source_world_id == world_id and cp.blueprint_id == blueprint.blueprint_id:
+                        valid_cps.append((cp_path, cp))
+                except Exception:
+                    pass
+            if valid_cps:
+                for i, (p, c) in enumerate(valid_cps):
+                    lbl = f" - {c.label}" if c.label else ""
+                    console.print(f"  [{i+1}] {p.name}{lbl}")
+                cidx = typer.prompt("Select checkpoint", type=int) - 1
+                cp_path, cp = valid_cps[cidx]
+                state = cp.state
+                history = cp.history
+                start_state_checkpoint = state.model_copy(deep=True)
+            else:
+                console.print("No valid checkpoints found for this world and blueprint.")
+                raise typer.Exit(code=1)
         else:
             console.print("No checkpoints found.")
             raise typer.Exit(code=1)
