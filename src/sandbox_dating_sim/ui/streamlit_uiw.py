@@ -1552,7 +1552,10 @@ def _tab_review():
 
     # --- Export ---
     st.subheader("匯出 Setup Package MD")
-    out_dir = st.text_input("輸出目錄", "examples")
+    world_id = pkg.world.world_id
+    default_out_path = Path(f"outputs/{world_id}/setup_package/{world_id}_setup_package.md")
+    st.info(f"檔案將匯出至專案預設路徑：`{default_out_path}`")
+    
     if st.button("匯出"):
         try:
             # 依據新需求，按下匯出時必須顯示驗證狀態
@@ -1569,8 +1572,8 @@ def _tab_review():
                         st.warning(f"[{issue.type}] {issue.path}: {issue.message}")
             else:
                 exporter = SetupPackageExporter(linter=linter)
-                # 透過 Exporter 包裝為 Markdown 格式寫入磁碟
-                filepath = exporter.write_file(pkg, Path(out_dir))
+                # 透過 Exporter 包裝為 Markdown 格式寫入磁碟，使用 2-A-0 預設路徑
+                filepath = exporter.write_file_default_path(pkg)
                 st.success(f"匯出成功！驗證狀態：passed ✅")
                 st.info(f"輸出檔案位置：{filepath.absolute()}")
         except Exception as e:

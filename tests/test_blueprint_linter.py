@@ -203,6 +203,8 @@ def _full_bp() -> EventBlueprint:
                 "choices": [
                     {"choice_id": "go", "choice_label": "出門", "choice_intent": "外出",
                      "result": ["goto: fallback_ev"]},
+                    {"choice_id": "meet_sophie", "choice_label": "去找蘇菲", "choice_intent": "進入蘇菲路線",
+                     "result": ["goto: sophie_good_ev"]},
                 ],
                 "time_cost": 1,
             },
@@ -216,6 +218,20 @@ def _full_bp() -> EventBlueprint:
                 "expected_assets": {"background": None, "bgm": None, "characters": []},
                 "choices": [
                     {"choice_id": "end", "choice_label": "接受", "choice_intent": "接受結局",
+                     "result": ["ending: debt_normal_ending"]},
+                ],
+                "time_cost": 1,
+            },
+            {
+                "event_id": "sophie_good_ev",
+                "title": "蘇菲路線結局", "scene_summary": "主角與蘇菲互相理解。",
+                "location_id": "school_library", "time_slot": "afternoon",
+                "priority": "route", "repeat_policy": "once",
+                "route_tags": ["character_route:sophie"], "conditions": [],
+                "event_purpose": "覆蓋蘇菲 Good Ending。", "cast": ["sophie"],
+                "expected_assets": {"background": None, "bgm": None, "characters": []},
+                "choices": [
+                    {"choice_id": "end", "choice_label": "接受", "choice_intent": "達成蘇菲結局",
                      "result": ["ending: sophie_good_ending"]},
                 ],
                 "time_cost": 1,

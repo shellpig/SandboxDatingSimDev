@@ -181,6 +181,17 @@ endings:
       - character_route:sophie
       - critical
       - ending_prerequisite
+  - ending_id: debt_normal_ending
+    title: 普通還債結局
+    ending_type: normal
+    target_character_id: global
+    description: 主角沒有深入任何角色路線，但靠打工與日常選擇撐過債務壓力。
+    required_flags: []
+    required_stats: []
+    forbidden_flags: []
+    priority: normal
+    route_tags:
+      - fallback_ending
 
 asset_vocabularies:
   allowed_bgms:

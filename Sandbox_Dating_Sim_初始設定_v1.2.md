@@ -2216,6 +2216,17 @@ endings:
       - character_route:sophie
       - critical
       - ending_prerequisite
+  - ending_id: debt_normal_ending
+    title: 普通還債結局
+    ending_type: normal
+    target_character_id: global
+    description: 主角沒有深入任何角色路線，但仍靠自己的努力撐過債務壓力。
+    required_flags: []
+    required_stats: []
+    forbidden_flags: []
+    priority: normal
+    route_tags:
+      - fallback_ending
 ```
 
 #### 結局欄位中文說明
@@ -2503,7 +2514,7 @@ Form-外暫存 state：
   - Protagonist 必填欄位齊全
   - locations 至少 1 筆（其中至少 1 筆 is_visitable=True）
   - characters 至少 1 筆
-  - endings 至少 1 筆
+  - endings 至少 2 筆（1 個目標結局 + 1 個 fallback/normal/global 結局）
   - flags = []
   - status_flags = []
 
@@ -2864,10 +2875,16 @@ Setup Package MD 的完整格式與後續 Event Blueprint MD 流程，請參閱�
 - 非永久 status flag 是否具備可達成的解除條件
 - ending 是否引用存在的角色
 - ending 條件是否引用已宣告 flag
+- Phase 2-ready 匯出是否至少有 1 個 character
+- Phase 2-ready 匯出是否至少有 2 個 endings
 
 ### 6.3 Setup Package MD 輸出資料包
 
 UIW 最終應輸出 Setup Package MD。Markdown 文件中主要資料應放在 YAML 區塊，工具內部則應保存 JSON 或 YAML 作為 canonical data。
+
+UIW 的「匯出」永遠代表 Phase 2-ready 正式 Setup Package，而不是草稿保存。若 `characters` 少於 1 筆，或 `endings` 少於 2 筆，UIW Linter 必須報 error 並阻止匯出成功。`flags` 與 `status_flags` 可為空；Phase 2 Event Blueprint 可透過 `new_flags_proposed` 提出新的 boolean flags，不要求每個世界都使用 status 系統。
+
+Phase 2 MVP 不允許 AI 新增 canonical characters。所有會被系統追蹤的角色都必須先存在於 `characters[]`。背景 NPC、路人、店員或同學可作為純文字出現在 `scene_summary`，但不可進入 `cast`、`expected_assets.characters`、favor/status DSL 或 ending target。
 
 Setup Package MD 的 YAML 區塊應包含：
 

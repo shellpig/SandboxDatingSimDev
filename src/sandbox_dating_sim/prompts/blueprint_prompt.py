@@ -208,6 +208,8 @@ def _build_event_rules() -> str:
 - 空 route_tag 不允許。
 - `cast` 列出此 event 出現的角色 character_id list。
 - `expected_assets.characters` 只列出 cast 中的角色，costume / emotion / position 填預期值。
+- 不可新增 canonical characters；`cast`、`expected_assets.characters`、`character.<id>.favor`、status target、ending target 只能引用 SetupPackage 已存在的 character_id。
+- 可在 `scene_summary` 用純文字描寫背景 NPC / 路人 / 店員 / 同學，但這些背景 NPC 不可進入 cast / expected_assets / DSL / ending target。
 - 新增的 boolean flag 必須列入 `new_flags_proposed`（只允許 type: boolean）。
 - 不使用 item.* / inventory.*，劇情物品以 boolean flag 表示。"""
 

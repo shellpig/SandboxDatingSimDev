@@ -127,6 +127,8 @@ AI 不負責最終判定事件是否有效。
 
 User Input Wizard 用於收集生成遊戲所需的核心參數。
 
+UIW 的正式匯出必須是 Phase 2-ready Setup Package，而不是草稿保存。最小 Phase 2-ready 條件包含：`characters` 至少 1 筆、`endings` 至少 2 筆；`flags` 與 `status_flags` 可為空。2 個 endings 的設計分工應包含至少 1 個目標結局，以及至少 1 個 fallback / normal / global 類型結局，供 Event Blueprint 的 `fallback_ending` event 明確觸發。
+
 ### 4.1 World Meta
 
 欄位：
@@ -396,6 +398,8 @@ schedule:
 - 條件與結果不得只寫自然語言。
 - 每個事件最多消耗一個或多個時間段，但必須明確標示。
 - 事件可用 `route_tags` 標記驗證優先權。
+- Phase 2 MVP 不允許 AI 新增 canonical characters。`cast`、`expected_assets.characters`、`character.<id>.favor`、status target 與 ending target 只能引用 Setup Package 已存在的 `characters[].character_id`。
+- 背景 NPC / 路人 / 店員 / 同學可作為純文字出現在場景描述中，但不可進入 `cast`、`expected_assets`、DSL 或 ending target；需要被追蹤、出圖、加好感或進路線的人物必須先由 UIW 建為 canonical character。
 
 ### 6.2 事件格式
 

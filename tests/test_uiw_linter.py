@@ -20,6 +20,46 @@ def test_linter_passes_minimal_fixture():
     for issue in report.issues:
         assert issue.severity != "error"
 
+def test_linter_rejects_no_characters_for_phase2_ready_export():
+    """Phase 2-ready Setup Package 至少需要 1 個 character。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.characters = []
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "missing_required_character" for i in report.issues)
+
+def test_linter_rejects_no_endings_for_phase2_ready_export():
+    """Phase 2-ready Setup Package 至少需要 2 個 endings。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.endings = []
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "insufficient_endings" for i in report.issues)
+
+def test_linter_rejects_single_ending_for_phase2_ready_export():
+    """只有 1 個 ending 無法支援 fallback 與目標結局的最小分工。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.endings = pkg.endings[:1]
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    assert report.status == "failed"
+    assert any(i.type == "insufficient_endings" for i in report.issues)
+
+def test_linter_allows_empty_flags_and_status_flags():
+    """flags/status_flags 可為空；Phase 2 可由 Blueprint 提出新 boolean flags。"""
+    pkg = load_yaml("setup_minimal.yaml")
+    pkg.flags = []
+    pkg.status_flags = []
+    for ending in pkg.endings:
+        ending.required_flags = []
+        ending.forbidden_flags = []
+    linter = UIWLinter()
+    report = linter.validate(pkg)
+    errors = [i for i in report.issues if i.severity == "error"]
+    assert not errors, [i.message for i in errors]
+
 def test_linter_rejects_duplicate_character_id():
     """重複 character_id 應產生 error。"""
     pkg = load_yaml("setup_minimal.yaml")

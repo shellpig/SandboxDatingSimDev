@@ -97,7 +97,7 @@ def test_minimal_blueprint_valid_from_fixture():
     assert isinstance(bp, EventBlueprint)
     assert bp.blueprint_id == "summer_city_2026_event_blueprint"
     assert bp.initial_event_id == "opening_morning"
-    assert len(bp.events) == 1
+    assert len(bp.events) == 3
 
 
 def test_minimal_blueprint_valid_from_dict():

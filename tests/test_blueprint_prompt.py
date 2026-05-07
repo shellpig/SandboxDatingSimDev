@@ -100,6 +100,14 @@ def test_contains_ending_rules():
     assert "ending:" in prompt
     assert "fallback_ending" in prompt
 
+def test_contains_character_boundary_rules():
+    """Prompt 明確禁止 AI 新增 canonical characters，但允許純文字背景 NPC。"""
+    prompt = build_event_blueprint_prompt(SAMPLE_SETUP_MD)
+    assert "不可新增 canonical characters" in prompt
+    assert "SetupPackage 已存在的 character_id" in prompt
+    assert "背景 NPC" in prompt
+    assert "不可進入 cast" in prompt
+
 
 # ---------------------------------------------------------------------------
 # #7: 含 status 規則

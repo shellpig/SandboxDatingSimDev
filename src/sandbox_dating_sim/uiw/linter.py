@@ -13,6 +13,7 @@ class UIWLinter:
         issues.extend(self._check_world(package))
         issues.extend(self._check_ids(package))
         issues.extend(self._check_locations(package))
+        issues.extend(self._check_phase2_readiness(package))
         issues.extend(self._check_characters(package))
         issues.extend(self._check_schedules(package))
         issues.extend(self._check_status_flags(package))
@@ -228,6 +229,24 @@ class UIWLinter:
                         message=f"主地點 {loc.location_id} 沒有任何可進入的子地點。"
                     ))
 
+        return issues
+
+    def _check_phase2_readiness(self, package: SetupPackage) -> list[Issue]:
+        issues = []
+        if len(package.characters) < 1:
+            issues.append(Issue(
+                severity="error",
+                type="missing_required_character",
+                path="characters",
+                message="Phase 2-ready Setup Package 至少需要 1 個角色。"
+            ))
+        if len(package.endings) < 2:
+            issues.append(Issue(
+                severity="error",
+                type="insufficient_endings",
+                path="endings",
+                message="Phase 2-ready Setup Package 至少需要 2 個結局：1 個目標結局與 1 個 fallback/normal 結局。"
+            ))
         return issues
 
     def _check_characters(self, package: SetupPackage) -> list[Issue]:

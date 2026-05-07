@@ -2,7 +2,7 @@
 
 本文件供新 session 快速了解專案全貌，取代逐份閱讀全部規格文件。需要深入某區段時，按行號索引讀取對應文件。
 
-最後更新：2026-05-06
+最後更新：2026-05-07
 
 ---
 
@@ -72,6 +72,8 @@ SetupPackage 包含：World、Protagonist、Location[]、Character[]（含 Sched
 
 關鍵 Literal 型別：DayType、TimeSlot、SchedulePriority、FlagType、DurationType、ClearRule、Gender、Orientation、EventPriority。
 
+UIW 匯出的 Setup Package 必須是 Phase 2-ready：至少 1 個 character、至少 2 個 endings；`flags` / `status_flags` 可空。
+
 ### blueprint.py（Phase 2）
 
 EventBlueprint 包含：blueprint_id、source_world_id、source_setup_package、initial_event_id、events: BlueprintEvent[]、new_flags_proposed: FlagDef[]。
@@ -100,7 +102,7 @@ BlueprintChoice 包含：choice_id、choice_label、choice_intent、result: list
 | 1-G-7 | ✅ 完成 | 自動產生唯一 canonical ID |
 | 1-G-8 | ✅ 大致完成 | 旗標/狀態頁 inline 編輯、targets 複選（完整手動驗收仍有缺口） |
 | 1-G-9 | ✅ 完成 | ScheduleEntry `specific_date` + `schedule_id` 自動生成 |
-| 2 | ✅ 完成 | Event Blueprint MVP（2-A-0 Setup Prerequisites, 2-A Schema, 2-B Prompt Builder, 2-C Parser + Linter, 2-D Logic Walkthrough） |
+| 2 | ✅ 完成 | Event Blueprint MVP（2-A-0 Setup Prerequisites, 2-A Schema, 2-B Prompt Builder, 2-C Parser + Linter, 2-D Logic Walkthrough, 2-E Setup Package Phase 2 Readiness） |
 | 3 | 未開始 | Map Manager, Status Manager, Route Validator |
 | 4-7 | 未開始 | Scene Draft, Dashboard, AI Provider, 資產管理 |
 
@@ -108,11 +110,15 @@ BlueprintChoice 包含：choice_id、choice_label、choice_intent、result: list
 
 見 `已知問題.md`（每次必讀）。
 
-主線：Phase 2 Event Blueprint MVP 已完成並驗證通過。
+主線：Phase 2 Event Blueprint MVP 已完成並驗證通過。Phase 2-E 已補上 UIW 匯出必須 Phase 2-ready 的最小內容規則。
 
 2026-05-06 驗證結果：
 - Phase 2 指定測試：`138 passed in 1.47s`。
 - 全專案非 integration 回歸：`269 passed in 2.14s`（Windows/OneDrive pytest temp 權限問題需用 `--basetemp` 並提升權限重跑）。
+
+2026-05-07 驗證結果：
+- Phase 2-E 目標測試：`119 passed in 1.12s`（提升權限重跑）。
+- 全專案非 integration 回歸：`274 passed in 2.11s`（提升權限重跑，`--basetemp .pytest_tmp_phase2e_full`）。
 
 Phase 2 子階段：
 - **2-A-0 Setup Prerequisites**：(✅ 已完成) `protagonist_home` 必備地點、`export-setup` 預設輸出到 `outputs/<world_id>/setup_package/`、同名檔不覆寫。
@@ -120,6 +126,7 @@ Phase 2 子階段：
 - **2-B Blueprint Prompt Builder**：(✅ 已完成) `prompts/blueprint_prompt.py`，章節化 Markdown prompt document，三種 scope（minimal_complete / ai_decides / custom），CLI 互動式。
 - **2-C Blueprint Parser + Linter**：(✅ 已完成) `pipeline/blueprint_parser.py` + `validation/blueprint_linter.py`，雙層驗證（blueprint-only / full with SetupPackage），嚴格 DSL。
 - **2-D Blueprint Logic Walkthrough**：(✅ 已完成) `walkthrough/` 模組，純函式 engine + CLI 薄殼，time progression、location unlock/closed、status duration、repeat once/daily、critical 遮蔽、checkpoint、Mermaid route graph。
+- **2-E Setup Package Phase 2 Readiness**：(✅ 已完成) UIW 匯出必須至少 1 個 character、至少 2 個 endings；`flags` / `status_flags` 可空；Prompt 明確禁止 AI 新增 canonical characters，背景 NPC 只可作為純文字描述。
 
 其他待辦：
 - 1-G-8 UI 行為測試覆蓋不足（已補強，待完整手動驗收）。
@@ -155,7 +162,8 @@ Phase 2 子階段：
 | **2-B Blueprint Prompt Builder** | **3504-3603** | **實作 prompt builder 時** |
 | **2-C Blueprint Parser + Linter** | **3605-3704** | **實作 parser / linter 時** |
 | **2-D Blueprint Logic Walkthrough** | **3706-4049** | **實作 walkthrough / checkpoint / graph 時** |
-| Phase 3-7 | 4051-4280+ | 遠期參考 |
+| **2-E Setup Package Phase 2 Readiness** | **4055-4115** | **修改 UIW 匯出 readiness / prompt character 邊界時** |
+| Phase 3-7 | 4117-4350+ | 遠期參考 |
 
 ### 測試指南.md（~1770 行）
 
@@ -176,7 +184,8 @@ Phase 2 子階段：
 | **2-B Prompt Builder 測試** | **1459-1495** | **實作 prompt builder 時** |
 | **2-C Parser + Linter 測試** | **1498-1600** | **實作 parser / linter 時** |
 | **2-D Walkthrough 測試** | **1603-1706** | **實作 walkthrough / checkpoint / graph 時** |
-| **Phase 2 後續回歸** | **1709-1730** | **Phase 2 子階段完成後** |
+| **2-E Setup Package Readiness 測試** | **1717-1776** | **修改 UIW readiness / prompt character 邊界時** |
+| **Phase 2 後續回歸** | **1778-1810** | **Phase 2 子階段完成後** |
 
 ### Sandbox_Dating_Sim_Dev_正式規格_v1.2.md（~1020 行）
 
